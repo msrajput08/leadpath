@@ -1,10 +1,19 @@
 <?xml version="1.0" encoding="UTF-8"?>
 <urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">
-<url><loc>https://REPLACE_WITH_LIVE_ORIGIN/</loc></url>
-<url><loc>https://REPLACE_WITH_LIVE_ORIGIN/how-it-works</loc></url>
-<url><loc>https://REPLACE_WITH_LIVE_ORIGIN/features</loc></url>
-<url><loc>https://REPLACE_WITH_LIVE_ORIGIN/pricing</loc></url>
-<url><loc>https://REPLACE_WITH_LIVE_ORIGIN/checker</loc></url>
-<url><loc>https://REPLACE_WITH_LIVE_ORIGIN/docs</loc></url>
-<url><loc>https://REPLACE_WITH_LIVE_ORIGIN/faq</loc></url>
+  <url><loc>https://leadpath.monty-08-raj.workers.dev/</loc></url>
+  <url><loc>https://leadpath.monty-08-raj.workers.dev/how-it-works</loc></url>
+  <url><loc>https://leadpath.monty-08-raj.workers.dev/features</loc></url>
+  <url><loc>https://leadpath.monty-08-raj.workers.dev/pricing</loc></url>
+  <url><loc>https://leadpath.monty-08-raj.workers.dev/checker</loc></url>
+  <url><loc>https://leadpath.monty-08-raj.workers.dev/docs</loc></url>
+  <url><loc>https://leadpath.monty-08-raj.workers.dev/faq</loc></url>
+  <url><loc>https://leadpath.monty-08-raj.workers.dev/contact</loc></url>
+  <url><loc>https://leadpath.monty-08-raj.workers.dev/privacy</loc></url>
+  <url><loc>https://leadpath.monty-08-raj.workers.dev/terms</loc></url>
+  <url><loc>https://leadpath.monty-08-raj.workers.dev/docs/webflow-make</loc></url>
+  <url><loc>https://leadpath.monty-08-raj.workers.dev/docs/make-sheets</loc></url>
+  <url><loc>https://leadpath.monty-08-raj.workers.dev/docs/crm-missing</loc></url>
+  <url><loc>https://leadpath.monty-08-raj.workers.dev/docs/webhook-200</loc></url>
+  <url><loc>https://leadpath.monty-08-raj.workers.dev/docs/silent-failures</loc></url>
+  <url><loc>https://leadpath.monty-08-raj.workers.dev/docs/free-monitoring</loc></url>
 </urlset>

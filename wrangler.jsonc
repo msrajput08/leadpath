@@ -6,12 +6,34 @@
   "assets": {
     "directory": "./dist",
     "not_found_handling": "single-page-application",
-    "run_worker_first": ["/api/*", "/auth/*"]
+    "run_worker_first": [
+      "/api/*",
+      "/auth/*"
+    ]
   },
-  "triggers": { "crons": ["*/15 * * * *"] },
-  "ratelimits": [{"name":"RATE_LIMITER","namespace_id":"910245","simple":{"limit":60,"period":60}}],
-  "d1_databases": [{ "binding": "DB", "database_name": "leadpath-db", "migrations_dir": "db/migrations" }],
+  "triggers": {
+    "crons": [
+      "*/15 * * * *"
+    ]
+  },
+  "ratelimits": [
+    {
+      "name": "RATE_LIMITER",
+      "namespace_id": "910245",
+      "simple": {
+        "limit": 60,
+        "period": 60
+      }
+    }
+  ],
+  "d1_databases": [
+    {
+      "binding": "DB",
+      "database_name": "leadpath-db",
+      "migrations_dir": "db/migrations"
+    }
+  ],
   "vars": {
-    "BASE_URL": "https://leadpath.REPLACE_WITH_ACCOUNT.workers.dev"
+    "BASE_URL": "https://leadpath.monty-08-raj.workers.dev"
   }
 }

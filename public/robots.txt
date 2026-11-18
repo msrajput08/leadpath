@@ -4,3 +4,4 @@ Disallow: /dashboard
 Disallow: /account
 Disallow: /api/
 Disallow: /auth/
+Sitemap: https://leadpath.monty-08-raj.workers.dev/sitemap.xml
