@@ -10,7 +10,7 @@
   },
   "triggers": { "crons": ["*/15 * * * *"] },
   "ratelimits": [{"name":"RATE_LIMITER","namespace_id":"910245","simple":{"limit":60,"period":60}}],
-  "d1_databases": [{ "binding": "DB", "database_name": "leadpath-db", "database_id": "REPLACE_WITH_CLOUDFLARE_D1_DATABASE_UUID", "migrations_dir": "db/migrations" }],
+  "d1_databases": [{ "binding": "DB", "database_name": "leadpath-db", "migrations_dir": "db/migrations" }],
   "vars": {
     "BASE_URL": "https://leadpath.REPLACE_WITH_ACCOUNT.workers.dev"
   }
