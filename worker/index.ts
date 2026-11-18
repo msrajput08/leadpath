@@ -22,11 +22,11 @@ export default {
    if (path==='/auth/google/start' && req.method==='GET') {
     const key='oauth-start:'+(req.headers.get('CF-Connecting-IP')||'anonymous');
     if (env.RATE_LIMITER && !(await env.RATE_LIMITER.limit({key})).success) return hardened(fail(429,'Too many sign-in attempts.'));
-    return authStart(env);
+    return hardened(await authStart(env));
    }
-   if (path==='/auth/google/callback' && req.method==='GET') return authCallback(req,env);
-   if (path==='/auth/github/start' && req.method==='GET') return githubStart(env);
-   if (path==='/auth/github/callback' && req.method==='GET') return githubCallback(req,env);
+   if (path==='/auth/google/callback' && req.method==='GET') return hardened(await authCallback(req,env));
+   if (path==='/auth/github/start' && req.method==='GET') return hardened(await githubStart(env));
+   if (path==='/auth/github/callback' && req.method==='GET') return hardened(await githubCallback(req,env));
    if (path==='/auth/logout' && req.method==='POST') return hardened(await authLogout(req,env));
    const cb=path.match(/^\/api\/callback\/([a-f0-9-]{36})$/);
    if (cb && req.method==='POST') return hardened(await confirmCallback(req,env,cb[1],ctx));

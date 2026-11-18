@@ -24,7 +24,20 @@ async function accountExport(env:Env, userId:string) {
 }
 export async function handleApi(req:Request,env:Env,ctx:Context):Promise<Response> {
  const pathname=new URL(req.url).pathname;
- if (pathname==='/api/public/status' && req.method==='GET') return json({ online:true, google_auth_configured:!!(env.GOOGLE_CLIENT_ID&&env.GOOGLE_CLIENT_SECRET),github_auth_configured:!!(env.GITHUB_CLIENT_ID&&env.GITHUB_CLIENT_SECRET), version:'0.1.0' });
+ if (pathname==='/api/public/status' && req.method==='GET') {
+  // Read-only diagnostics: credentials configured does not imply a usable DB binding.
+  const db_binding_configured=!!env.DB && typeof env.DB.prepare==='function';
+  let db_schema_ready=false;
+  if (db_binding_configured) {
+    try {
+      await env.DB.prepare('SELECT state_hash,provider,verifier,nonce,expires_at FROM oauth_states LIMIT 1').all();
+      db_schema_ready=true;
+    } catch {
+      // Do not expose SQL errors, provider credentials or database details publicly.
+    }
+  }
+  return json({online:true,google_auth_configured:!!(env.GOOGLE_CLIENT_ID&&env.GOOGLE_CLIENT_SECRET),github_auth_configured:!!(env.GITHUB_CLIENT_ID&&env.GITHUB_CLIENT_SECRET),db_binding_configured,db_schema_ready,version:'0.1.0'});
+ }
  const session=await getSession(req,env);
  if (!session) return fail(401,'Sign in with Google to access your dashboard.');
  if (env.RATE_LIMITER && !(await env.RATE_LIMITER.limit({key:'user:'+session.user_id})).success) return fail(429,'Too many API requests; try again shortly.');
