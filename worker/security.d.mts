@@ -1,0 +1,13 @@
+export const MIN_INTERVAL_SECONDS: number;
+export const CONFIRMATION_WINDOW_MS: number;
+export const ONE_DAY_MS: number;
+export function validateMakeWebhook(raw: unknown): { ok: boolean; error?: string; url?: string };
+export function validateJsonSample(raw: unknown): { ok: boolean; error?: string; keys?: number; hasRunId?: boolean; warnings?: string[] };
+export function newRandomString(bytes?: number): string;
+export function sha256(s: string): Promise<string>;
+export function constantTimeEqual(a: unknown, b: unknown): boolean;
+export function encryptSecret(s: string, key: string): Promise<string>;
+export function decryptSecret(s: string, key: string): Promise<string>;
+export function syntheticPayload(runId: string, now: number, callbackUrl: string): Record<string, unknown>;
+export function parseCookies(raw: string | null): Record<string, string>;
+export function secureCookie(name: string, value: string, maxAge: number, secure?: boolean): string;

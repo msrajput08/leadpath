@@ -1,0 +1,74 @@
+
+> leadpath@0.1.0 test
+> npm run typecheck:worker && npm run test:build && node --experimental-sqlite --test tests/*.test.mjs
+
+
+> leadpath@0.1.0 typecheck:worker
+> tsc --project tsconfig.worker.json --noEmit
+
+
+> leadpath@0.1.0 test:build
+> tsc --project tsconfig.worker.json --noEmit false --outDir .test-build && cp worker/security.mjs .test-build/security.mjs
+
+TAP version 13
+# (node:1992) ExperimentalWarning: SQLite is an experimental feature and might change at any time
+# (Use `node --trace-warnings ...` to show where the warning was created)
+# Subtest: Google OAuth validates signed identity, nonce, state replay, then creates persistent session
+ok 1 - Google OAuth validates signed identity, nonce, state replay, then creates persistent session
+  ---
+  duration_ms: 319.491557
+  type: 'test'
+  ...
+# Subtest: GitHub OAuth validates state, verified primary email and creates user without storing access token
+ok 2 - GitHub OAuth validates state, verified primary email and creates user without storing access token
+  ---
+  duration_ms: 4.994795
+  type: 'test'
+  ...
+# (node:1993) ExperimentalWarning: SQLite is an experimental feature and might change at any time
+# (Use `node --trace-warnings ...` to show where the warning was created)
+# Subtest: local integration: account isolation, actual dispatch contract, callback, replay, timeouts and alerts
+ok 3 - local integration: account isolation, actual dispatch contract, callback, replay, timeouts and alerts
+  ---
+  duration_ms: 95.581809
+  type: 'test'
+  ...
+# Subtest: scheduler claim is idempotent; upstream errors are not marked confirmed; paused and expired runs stay blocked
+ok 4 - scheduler claim is idempotent; upstream errors are not marked confirmed; paused and expired runs stay blocked
+  ---
+  duration_ms: 12.551762
+  type: 'test'
+  ...
+# Subtest: accept only sanctioned Make HTTPS webhook URLs
+ok 5 - accept only sanctioned Make HTTPS webhook URLs
+  ---
+  duration_ms: 1.785476
+  type: 'test'
+  ...
+# Subtest: JSON checker rejects malformed input and reports correlation gaps
+ok 6 - JSON checker rejects malformed input and reports correlation gaps
+  ---
+  duration_ms: 0.420655
+  type: 'test'
+  ...
+# Subtest: secrets are authenticated, encrypted and not returned in plaintext
+ok 7 - secrets are authenticated, encrypted and not returned in plaintext
+  ---
+  duration_ms: 16.535612
+  type: 'test'
+  ...
+# Subtest: synthetic data never includes a real customer email
+ok 8 - synthetic data never includes a real customer email
+  ---
+  duration_ms: 0.697068
+  type: 'test'
+  ...
+1..8
+# tests 8
+# suites 0
+# pass 8
+# fail 0
+# cancelled 0
+# skipped 0
+# todo 0
+# duration_ms 427.427002

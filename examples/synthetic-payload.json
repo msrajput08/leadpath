@@ -1,0 +1,9 @@
+{
+  "run_id": "f0eac37e-57dc-4a80-bdf1-09cbb2bec14f",
+  "leadpath_test": true,
+  "record_type": "SYNTHETIC_TEST_DO_NOT_CONTACT",
+  "sample_name": "LeadPath Test",
+  "sample_email": "test@example.invalid",
+  "triggered_at": "2026-11-18T12:00:00.000Z",
+  "confirmation_url": "https://YOUR-WORKER.workers.dev/api/callback/YOUR-MONITOR-UUID"
+}

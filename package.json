@@ -1,0 +1,33 @@
+{
+  "name": "leadpath",
+  "private": true,
+  "version": "0.1.0",
+  "type": "module",
+  "scripts": {
+    "dev": "vite --host 127.0.0.1",
+    "build": "tsc --noEmit && vite build",
+    "deploy": "npm run build && wrangler deploy",
+    "db:local": "wrangler d1 migrations apply leadpath-db --local",
+    "db:remote": "wrangler d1 migrations apply leadpath-db --remote",
+    "test": "npm run typecheck:worker && npm run test:build && node --experimental-sqlite --test tests/*.test.mjs",
+    "typecheck:worker": "tsc --project tsconfig.worker.json --noEmit",
+    "test:build": "tsc --project tsconfig.worker.json --noEmit false --outDir .test-build && cp worker/security.mjs .test-build/security.mjs",
+    "test:vitest": "vitest run tests/validators.vitest.ts",
+    "test:e2e": "playwright test"
+  },
+  "dependencies": {
+    "react": "^19.2.0",
+    "react-dom": "^19.2.0",
+    "lucide-react": "^0.468.0"
+  },
+  "devDependencies": {
+    "@types/react": "^19.2.0",
+    "@types/react-dom": "^19.2.0",
+    "@types/node": "^22.15.0",
+    "typescript": "^5.9.0",
+    "vite": "^7.1.0",
+    "wrangler": "^4.40.0",
+    "vitest": "^3.2.0",
+    "@playwright/test": "^1.55.0"
+  }
+}

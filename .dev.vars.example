@@ -1,0 +1,9 @@
+# Copy to .dev.vars (do not commit); use Cloudflare wrangler secret put for production.
+GOOGLE_CLIENT_ID=YOUR_GOOGLE_OAUTH_CLIENT_ID
+GOOGLE_CLIENT_SECRET=YOUR_GOOGLE_OAUTH_CLIENT_SECRET
+WEBHOOK_ENCRYPTION_KEY=64_LOWERCASE_HEX_DIGITS_32_BYTE_RANDOM_KEY
+# Optional server-side alerts
+TELEGRAM_BOT_TOKEN=
+# Optional alternative OAuth provider for free workers.dev hosting
+GITHUB_CLIENT_ID=
+GITHUB_CLIENT_SECRET=
