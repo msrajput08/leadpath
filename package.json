@@ -11,8 +11,8 @@
     "db:remote": "wrangler d1 migrations apply leadpath-db --remote",
     "test": "npm run typecheck:worker && npm run test:build && node --experimental-sqlite --test tests/*.test.mjs",
     "typecheck:worker": "tsc --project tsconfig.worker.json --noEmit",
-    "test:build": "tsc --project tsconfig.worker.json --noEmit false --outDir .test-build && cp worker/security.mjs .test-build/security.mjs",
-    "test:vitest": "vitest run tests/validators.vitest.ts",
+    "test:build": "tsc --project tsconfig.worker.json --noEmit false --outDir .test-build && node scripts/copy-test-security.mjs",
+    "test:vitest": "vitest run tests/validators.test.ts",
     "test:e2e": "playwright test"
   },
   "dependencies": {
