@@ -17,25 +17,40 @@ test('broken JSON reports actual syntax failure',async({page})=>{
 });
 test('dashboard shows sign-in without a session',async({page})=>{
  await page.goto('/dashboard');
- await expect(page.getByText(/No sign-in providers are configured|Continue with Google|Continue with GitHub/i)).toBeVisible();
+ await expect(page.getByText(/No sign-in providers are configured|Continue with Google|Email\/password sign-in will be available/i)).toBeVisible();
 });
-
-test('all configured sign-in methods render and email OTP offers a code form',async({page})=>{
+test('premium signup can send verification and login keeps OAuth providers',async({page})=>{
  await page.route('**/api/public/status',route=>route.fulfill({
   status:200,contentType:'application/json',body:JSON.stringify({
    online:true,google_auth_configured:true,github_auth_configured:true,
-   facebook_auth_configured:true,x_auth_configured:true,email_auth_configured:true
+   facebook_auth_configured:false,x_auth_configured:false,email_auth_configured:false,password_auth_configured:true
   })
  }));
- await page.route('**/auth/email/request',route=>route.fulfill({
+ await page.route('**/auth/password/signup',route=>route.fulfill({
   status:200,contentType:'application/json',body:JSON.stringify({ok:true})
  }));
+ await page.goto('/signup');
+ await expect(page.getByRole('heading',{name:/A better way to stay ahead/i})).toBeVisible();
+ await page.getByLabel('Full name').fill('Test User');
+ await page.getByLabel('Email address').fill('test@example.com');
+ await page.getByLabel('Password',{exact:true}).fill('safe-password-example-123');
+ await page.getByLabel('Confirm password').fill('safe-password-example-123');
+ await page.getByRole('button',{name:/Create free account/i}).click();
+ await expect(page.getByRole('heading',{name:/Check your inbox/i})).toBeVisible();
  await page.goto('/login');
- await expect(page.getByRole('link',{name:/Continue with Google/i})).toBeVisible();
- await expect(page.getByRole('link',{name:/Continue with Facebook/i})).toBeVisible();
- await expect(page.getByRole('link',{name:/Continue with X/i})).toBeVisible();
- await expect(page.getByRole('link',{name:/Continue with GitHub/i})).toBeVisible();
- await page.getByLabel('Email address').fill('person@example.test');
- await page.getByRole('button',{name:/Send sign-in code/i}).click();
- await expect(page.getByLabel('6-digit code')).toBeVisible();
+ await expect(page.getByRole('heading',{name:/Welcome back/i})).toBeVisible();
+ await expect(page.getByRole('link',{name:/Google/i})).toBeVisible();
+ await expect(page.getByRole('link',{name:/GitHub/i})).toBeVisible();
+ await expect(page.getByRole('link',{name:/Forgot password/i})).toBeVisible();
+});
+test('password reset form checks matching passwords without sending malformed requests',async({page})=>{
+ await page.route('**/api/public/status',route=>route.fulfill({
+  status:200,contentType:'application/json',
+  body:JSON.stringify({google_auth_configured:false,github_auth_configured:false,password_auth_configured:true})
+ }));
+ await page.goto('/reset-password?token='+('a'.repeat(64)));
+ await page.getByLabel('New password').fill('new-secure-password-123');
+ await page.getByLabel('Confirm password').fill('different-secure-password-123');
+ await page.getByRole('button',{name:/Update password/i}).click();
+ await expect(page.getByText('Passwords do not match.')).toBeVisible();
 });
