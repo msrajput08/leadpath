@@ -10,10 +10,7 @@ jobs:
       - uses: actions/checkout@v4
       - uses: actions/setup-node@v4
         with: {node-version: '22'}
-      - run: npm install --no-audit --no-fund
-      - name: Temporary lockfile export (remove after pinning)
-        run: |
-          node -e "const fs=require('fs');const b=fs.readFileSync('package-lock.json').toString('base64');console.log('LOCKFILE_BEGIN');for(let i=0;i<b.length;i+=500)console.log('LOCK_CHUNK:'+b.slice(i,i+500));console.log('LOCKFILE_END')"
+      - run: npm ci --no-audit --no-fund
       - run: npm test
       - run: npm run test:vitest
       - run: npm run build
