@@ -1,5 +1,5 @@
 import type { Env, Monitor, Run } from './types.js';
-import { json, now } from './util.js';
+import { json, now, readBoundedJson, InputError } from './util.js';
 import { CONFIRMATION_WINDOW_MS, decryptSecret, syntheticPayload, sha256, constantTimeEqual, validateMakeWebhook } from './security.mjs';
 
 type SideEffect = { waitUntil(promise: Promise<unknown>): void };
@@ -84,28 +84,29 @@ export async function confirmCallback(req: Request, env: Env, monitorId: string,
  if (!raw.startsWith('Bearer ') || !/^[a-f0-9]{64}$/.test(raw.slice(7))) return json({error:'Unauthorized callback'},401);
  const monitor=await env.DB.prepare('SELECT * FROM monitors WHERE id=?').bind(monitorId).first<Monitor>();
  if (!monitor || !constantTimeEqual(await sha256(raw.slice(7)),monitor.secret_hash)) return json({error:'Unauthorized callback'},401);
- if (!req.headers.get('content-type')?.toLowerCase().startsWith('application/json')) return json({error:'Expected application/json'},415);
- const size=Number(req.headers.get('content-length')||0);
- if (size>1024) return json({error:'Callback body too large'},413);
- let data: unknown;
- try { const text=await req.text(); if (text.length>1024) throw new Error('too large'); data=JSON.parse(text); }
- catch { return json({error:'Malformed JSON'},400); }
- const runId=(data as {run_id?:unknown})?.run_id;
+ let data: Record<string, unknown>;
+ try { data=await readBoundedJson(req,1024); }
+ catch (error) {
+  return json({error:error instanceof InputError?error.message:'Unable to read callback'},error instanceof InputError?error.status:400);
+ }
+ const runId=data.run_id;
  if (typeof runId!=='string' || !/^[0-9a-f-]{36}$/.test(runId)) return json({error:'Valid run_id required'},400);
  const run=await env.DB.prepare('SELECT * FROM runs WHERE id=? AND monitor_id=?').bind(runId,monitorId).first<Run>();
  if (!run) return json({error:'Unknown run'},404);
  if (run.state==='confirmed') return json({ok:true,run_id:runId,already_confirmed:true});
  if (run.state!=='pending' || run.expires_at<now()) return json({error:'Run no longer accepts confirmation'},409);
  const time=now();
- const changed=await env.DB.prepare("UPDATE runs SET state='confirmed',confirmed_at=?,duration_ms=?,error_code=NULL WHERE id=? AND monitor_id=? AND state='pending' AND expires_at>=?")
-  .bind(time,time-run.created_at,runId,monitorId,time).run();
- if (!changed.meta.changes) return json({error:'Concurrent completion, retry to inspect status'},409);
- await env.DB.prepare('INSERT OR IGNORE INTO acknowledgments (run_id,monitor_id,received_at) VALUES(?,?,?)').bind(runId,monitorId,time).run();
- if (monitor.last_run_id===runId) {
-  await env.DB.prepare("UPDATE monitors SET failure_streak=0,health='healthy',updated_at=?,lock_until=NULL WHERE id=? AND last_run_id=?")
-   .bind(time,monitorId,runId).run();
-  if (monitor.failure_streak>0) await emitAlert(env,monitor,runId,'recovery',ctx);
- }
+ // Atomic D1 transaction: confirmation, acknowledgment and health update cannot partially commit.
+ const committed=await env.DB.batch<{meta:{changes:number}}>([
+  env.DB.prepare("UPDATE runs SET state='confirmed',confirmed_at=?,duration_ms=?,error_code=NULL WHERE id=? AND monitor_id=? AND state='pending' AND expires_at>=?")
+   .bind(time,time-run.created_at,runId,monitorId,time),
+  env.DB.prepare("INSERT OR IGNORE INTO acknowledgments(run_id,monitor_id,received_at) SELECT id,monitor_id,? FROM runs WHERE id=? AND monitor_id=? AND state='confirmed'")
+   .bind(time,runId,monitorId),
+  env.DB.prepare("UPDATE monitors SET failure_streak=0,health='healthy',updated_at=?,lock_until=NULL WHERE id=? AND last_run_id=? AND EXISTS(SELECT 1 FROM runs WHERE id=? AND monitor_id=? AND state='confirmed')")
+   .bind(time,monitorId,runId,runId,monitorId)
+ ]);
+ if (!committed[0]?.meta?.changes) return json({error:'Concurrent completion, retry to inspect status'},409);
+ if (committed[2]?.meta?.changes && monitor.failure_streak>0) await emitAlert(env,monitor,runId,'recovery',ctx);
  return json({ok:true,run_id:runId,delivery:'destination_confirmed'});
 }
 
