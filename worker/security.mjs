@@ -32,6 +32,18 @@ export async function sha256(s) {
   const digest = await crypto.subtle.digest('SHA-256', encoder.encode(s));
   return Array.from(new Uint8Array(digest), b => b.toString(16).padStart(2, '0')).join('');
 }
+/**
+ * Prove that a monitor's callback has seen a server-only challenge sent to
+ * its Make webhook. This value must never appear in the run API response.
+ * Reuse the existing server-side encryption key, with domain-separated HMAC.
+ */
+export async function webhookOwnershipProof(runId, keyHex) {
+  if (typeof keyHex !== 'string' || !/^[a-fA-F0-9]{64}$/.test(keyHex)) throw new Error('Webhook proof key unavailable.');
+  const bytes = Uint8Array.from(keyHex.match(/../g).map(x => parseInt(x, 16)));
+  const key = await crypto.subtle.importKey('raw', bytes, { name: 'HMAC', hash: 'SHA-256' }, false, ['sign']);
+  const digest = new Uint8Array(await crypto.subtle.sign('HMAC', key, encoder.encode(`leadpath-ownership-v1:${runId}`)));
+  return Array.from(digest, b => b.toString(16).padStart(2, '0')).join('');
+}
 export function constantTimeEqual(a, b) {
   if (typeof a !== 'string' || typeof b !== 'string') return false;
   let diff = a.length ^ b.length;
