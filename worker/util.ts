@@ -18,16 +18,44 @@ export function mustBeSameOrigin(request: Request, env: Env): boolean {
 }
 export function csrfOk(request: Request, session: Session): boolean { return request.headers.get('X-CSRF-Token') === session.csrf_token; }
 export function fail(status: number, message: string): Response { return json({ error: message }, status); }
-export async function readSmallJson(req: Request): Promise<Record<string, unknown>> {
- const size = Number(req.headers.get('content-length') || '0');
- if (size > 8192) throw new Error('Body exceeds 8KB');
- if (!(req.headers.get('content-type') || '').toLowerCase().startsWith('application/json')) throw new Error('Expected application/json');
- const text = await req.text();
- if (text.length > 8192) throw new Error('Body exceeds 8KB');
- const value = JSON.parse(text);
- if (!value || typeof value !== 'object' || Array.isArray(value)) throw new Error('Expected an object');
- return value as Record<string, unknown>;
+export class InputError extends Error {
+ constructor(public status: number, message: string) { super(message); this.name = 'InputError'; }
 }
+// Enforce limits while streaming; do not buffer an unbounded request before checking.
+export async function readBoundedJson(req: Request, maxBytes = 8192): Promise<Record<string, unknown>> {
+ if (!(req.headers.get('content-type') || '').toLowerCase().startsWith('application/json')) {
+  throw new InputError(415, 'Expected application/json');
+ }
+ const header = req.headers.get('content-length');
+ if (header !== null && (!/^\d+$/.test(header) || Number(header) > maxBytes)) {
+  throw new InputError(413, 'Request body too large');
+ }
+ if (!req.body) throw new InputError(400, 'A JSON object is required');
+ const reader = req.body.getReader();
+ const chunks: Uint8Array[] = [];
+ let length = 0;
+ while (true) {
+  const {done,value} = await reader.read();
+  if (done) break;
+  length += value.byteLength;
+  if (length > maxBytes) {
+   await reader.cancel().catch(() => undefined);
+   throw new InputError(413, 'Request body too large');
+  }
+  chunks.push(value);
+ }
+ const bytes = new Uint8Array(length);
+ let offset = 0;
+ for (const chunk of chunks) { bytes.set(chunk, offset); offset += chunk.length; }
+ let payload: unknown;
+ try { payload = JSON.parse(new TextDecoder('utf-8', {fatal:true}).decode(bytes)); }
+ catch { throw new InputError(400, 'Malformed JSON'); }
+ if (!payload || typeof payload !== 'object' || Array.isArray(payload)) {
+  throw new InputError(400, 'Expected a JSON object');
+ }
+ return payload as Record<string, unknown>;
+}
+export const readSmallJson = (req:Request) => readBoundedJson(req,8192);
 export function publicMonitor(row: Record<string, unknown>) {
  const { id, name, state, health, interval_seconds, next_due, last_checked, failure_streak, created_at } = row;
  return { id, name, state, health, interval_seconds, next_due, last_checked, failure_streak, created_at, endpoint: 'Make custom webhook (URL redacted)' };

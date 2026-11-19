@@ -1,5 +1,5 @@
 import type { Env, Monitor, Run } from './types.js';
-import { json, now } from './util.js';
+import { json, now, readBoundedJson, InputError } from './util.js';
 import { CONFIRMATION_WINDOW_MS, decryptSecret, syntheticPayload, sha256, constantTimeEqual, validateMakeWebhook } from './security.mjs';
 
 type SideEffect = { waitUntil(promise: Promise<unknown>): void };
@@ -17,7 +17,8 @@ async function emitAlert(env: Env, monitor: Monitor, runId: string, kind: 'failu
  ctx.waitUntil(fetch(`https://api.telegram.org/bot${env.TELEGRAM_BOT_TOKEN}/sendMessage`,{
   method:'POST',headers:{'content-type':'application/json'},body:JSON.stringify({chat_id:chatId,text:`LeadPath: ${message}`}),
   signal:AbortSignal.timeout(7000)
- }).then(()=>undefined).catch(()=>undefined));
+ }).then(result=>{ if(!result.ok) console.error('LeadPath Telegram notification rejected',result.status); })
+   .catch(()=>console.error('LeadPath Telegram notification transport failed')));
 }
 
 async function failRun(env: Env, runId: string, monitorId: string, state: 'unconfirmed'|'error', code: string, ctx: SideEffect): Promise<boolean> {
@@ -26,9 +27,9 @@ async function failRun(env: Env, runId: string, monitorId: string, state: 'uncon
  if (!changed.meta.changes) return false;
  const row=await env.DB.prepare('SELECT * FROM monitors WHERE id=?').bind(monitorId).first<Monitor>();
  if (!row || row.last_run_id!==runId) return true;
- await env.DB.prepare("UPDATE monitors SET failure_streak=failure_streak+1,health=CASE WHEN failure_streak>=1 THEN 'failing' ELSE 'degraded' END,updated_at=?,lock_until=NULL WHERE id=? AND last_run_id=?")
+ const updated=await env.DB.prepare("UPDATE monitors SET failure_streak=failure_streak+1,health=CASE WHEN failure_streak>=1 THEN 'failing' ELSE 'degraded' END,updated_at=?,lock_until=NULL WHERE id=? AND last_run_id=? AND state='active'")
   .bind(now(),monitorId,runId).run();
- if (row.failure_streak===1) await emitAlert(env,row,runId,'failure',ctx);
+ if (updated.meta.changes && row.failure_streak===1) await emitAlert(env,row,runId,'failure',ctx);
  return true;
 }
 
@@ -45,8 +46,8 @@ export async function runMonitor(env: Env, monitor: Monitor, source: 'manual'|'s
   .bind(time+HOUR6,time+60000,time,runId,time,monitor.id,threshold,time).run();
  if (!result.meta.changes) return {accepted:false,message:'Monitor paused, locked or in manual-test cooldown (15 minutes).'};
  try {
-  await env.DB.prepare("INSERT INTO runs (id,monitor_id,state,source,created_at,expires_at,trigger_sent_at) VALUES(?,?,'pending',?,?,?,?)")
-   .bind(runId,monitor.id,source,time,time+CONFIRMATION_WINDOW_MS,time).run();
+  await env.DB.prepare("INSERT INTO runs (id,monitor_id,state,source,created_at,expires_at) VALUES(?,?,'pending',?,?,?)")
+   .bind(runId,monitor.id,source,time,time+CONFIRMATION_WINDOW_MS).run();
  } catch {
   await env.DB.prepare("UPDATE monitors SET health='degraded',lock_until=NULL,next_due=? WHERE id=? AND last_run_id=?")
    .bind(time+MANUAL_COOLDOWN,monitor.id,runId).run();
@@ -63,6 +64,7 @@ export async function runMonitor(env: Env, monitor: Monitor, source: 'manual'|'s
  }
  const callbackUrl=new URL(`/api/callback/${monitor.id}`,env.BASE_URL).toString();
  try {
+  await env.DB.prepare("UPDATE runs SET trigger_sent_at=? WHERE id=? AND state='pending'").bind(now(),runId).run();
   // Never redirect: the URL is a secret, and redirecting to another host would expose its payload.
   const response=await fetch(target,{ method:'POST',redirect:'manual',signal:AbortSignal.timeout(8000),
    headers:{'Content-Type':'application/json','X-LeadPath-Test':'true'},
@@ -84,28 +86,29 @@ export async function confirmCallback(req: Request, env: Env, monitorId: string,
  if (!raw.startsWith('Bearer ') || !/^[a-f0-9]{64}$/.test(raw.slice(7))) return json({error:'Unauthorized callback'},401);
  const monitor=await env.DB.prepare('SELECT * FROM monitors WHERE id=?').bind(monitorId).first<Monitor>();
  if (!monitor || !constantTimeEqual(await sha256(raw.slice(7)),monitor.secret_hash)) return json({error:'Unauthorized callback'},401);
- if (!req.headers.get('content-type')?.toLowerCase().startsWith('application/json')) return json({error:'Expected application/json'},415);
- const size=Number(req.headers.get('content-length')||0);
- if (size>1024) return json({error:'Callback body too large'},413);
- let data: unknown;
- try { const text=await req.text(); if (text.length>1024) throw new Error('too large'); data=JSON.parse(text); }
- catch { return json({error:'Malformed JSON'},400); }
- const runId=(data as {run_id?:unknown})?.run_id;
+ let data: Record<string, unknown>;
+ try { data=await readBoundedJson(req,1024); }
+ catch (error) {
+  return json({error:error instanceof InputError?error.message:'Unable to read callback'},error instanceof InputError?error.status:400);
+ }
+ const runId=data.run_id;
  if (typeof runId!=='string' || !/^[0-9a-f-]{36}$/.test(runId)) return json({error:'Valid run_id required'},400);
  const run=await env.DB.prepare('SELECT * FROM runs WHERE id=? AND monitor_id=?').bind(runId,monitorId).first<Run>();
  if (!run) return json({error:'Unknown run'},404);
  if (run.state==='confirmed') return json({ok:true,run_id:runId,already_confirmed:true});
  if (run.state!=='pending' || run.expires_at<now()) return json({error:'Run no longer accepts confirmation'},409);
  const time=now();
- const changed=await env.DB.prepare("UPDATE runs SET state='confirmed',confirmed_at=?,duration_ms=?,error_code=NULL WHERE id=? AND monitor_id=? AND state='pending' AND expires_at>=?")
-  .bind(time,time-run.created_at,runId,monitorId,time).run();
- if (!changed.meta.changes) return json({error:'Concurrent completion, retry to inspect status'},409);
- await env.DB.prepare('INSERT OR IGNORE INTO acknowledgments (run_id,monitor_id,received_at) VALUES(?,?,?)').bind(runId,monitorId,time).run();
- if (monitor.last_run_id===runId) {
-  await env.DB.prepare("UPDATE monitors SET failure_streak=0,health='healthy',updated_at=?,lock_until=NULL WHERE id=? AND last_run_id=?")
-   .bind(time,monitorId,runId).run();
-  if (monitor.failure_streak>0) await emitAlert(env,monitor,runId,'recovery',ctx);
- }
+ // Atomic D1 transaction: confirmation, acknowledgment and health update cannot partially commit.
+ const committed=await env.DB.batch<{meta:{changes:number}}>([
+  env.DB.prepare("UPDATE runs SET state='confirmed',confirmed_at=?,duration_ms=?,error_code=NULL WHERE id=? AND monitor_id=? AND state='pending' AND expires_at>=?")
+   .bind(time,time-run.created_at,runId,monitorId,time),
+  env.DB.prepare("INSERT OR IGNORE INTO acknowledgments(run_id,monitor_id,received_at) SELECT id,monitor_id,? FROM runs WHERE id=? AND monitor_id=? AND state='confirmed'")
+   .bind(time,runId,monitorId),
+  env.DB.prepare("UPDATE monitors SET failure_streak=0,health='healthy',updated_at=?,lock_until=NULL WHERE id=? AND last_run_id=? AND state='active' AND EXISTS(SELECT 1 FROM runs WHERE id=? AND monitor_id=? AND state='confirmed')")
+   .bind(time,monitorId,runId,runId,monitorId)
+ ]);
+ if (!committed[0]?.meta?.changes) return json({error:'Concurrent completion, retry to inspect status'},409);
+ if (committed[2]?.meta?.changes && monitor.failure_streak>0) await emitAlert(env,monitor,runId,'recovery',ctx);
  return json({ok:true,run_id:runId,delivery:'destination_confirmed'});
 }
 

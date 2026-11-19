@@ -2,7 +2,7 @@
 
 **Never lose a lead to a broken workflow.** A single-deployment, zero-paid-dependency MVP for monitoring a configured **Make.com webhook → Google Sheets → authenticated callback** flow.
 
-> **Current verification status:** Source-code implementation with local database/HTTP integration tests. **Not a deployed or production-verified service.** The Google/GitHub OAuth tests use simulated provider responses; a real Make → Sheets scenario and Cloudflare deployment are not yet verified. See `VERIFICATION.md` before inviting users.
+> **Current verification status:** Source-code implementation with local database/HTTP integration tests. **Not a deployed or production-verified service.** The Google/GitHub OAuth tests use simulated provider responses; a real Make → Sheets scenario and Cloudflare deployment are not yet verified. See `PRODUCTION_READINESS.md` and `VERIFICATION.md` before inviting users.
 
 ## What's built
 
@@ -38,7 +38,7 @@ VERIFICATION.md       Verified and unverified acceptance criteria
 ## 2. Install
 
 ```bash
-npm install
+npm ci
 cp .dev.vars.example .dev.vars
 ```
 
