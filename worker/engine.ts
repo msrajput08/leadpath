@@ -140,6 +140,8 @@ export async function scheduled(env: Env, ctx: SideEffect): Promise<void> {
  if (utc.getUTCHours()===0 && utc.getUTCMinutes()===0) {
   await env.DB.prepare('DELETE FROM oauth_states WHERE expires_at<?').bind(time).run();
   await env.DB.prepare('DELETE FROM email_login_codes WHERE expires_at<?').bind(time).run();
+  await env.DB.prepare('DELETE FROM password_tokens WHERE expires_at<?').bind(time).run();
+  await env.DB.prepare('DELETE FROM password_mail_limits WHERE window_start<?').bind(time-2*86400000).run();
   await env.DB.prepare('DELETE FROM sessions WHERE expires_at<?').bind(time).run();
   await env.DB.prepare('DELETE FROM runs WHERE created_at<?').bind(time-90*86400000).run();
   await env.DB.prepare('DELETE FROM audit_events WHERE occurred_at<?').bind(time-365*86400000).run();
