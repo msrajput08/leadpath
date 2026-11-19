@@ -36,3 +36,10 @@
 - When merged, Cloudflare's GitHub integration can auto-deploy; inspect the active version and re-test core login + callback.
 - If smoke tests fail, roll back Cloudflare to the previous deployment and investigate before re-releasing.
 - Never put OAuth secrets, Telegram tokens, Make webhook URLs or callback credentials into source control or screenshots.
+
+## D1 backup and recovery (operator action required)
+- Cloudflare D1 Free offers a 7-day Time Travel window; it is not an infinite backup history. See Cloudflare D1 Time Travel documentation.
+- Before changes involving user data, use Wrangler with your authenticated Cloudflare account:
+  `npx wrangler d1 export DB --remote --output backups/leadpath-backup.sql`
+- Keep the exported SQL securely offline. It contains user profiles and monitoring records; do not commit it or share it in issue comments.
+- Verify the backup file and practice restore in a disposable database. Never overwrite the production database during a drill.
