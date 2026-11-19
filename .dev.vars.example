@@ -7,3 +7,15 @@ TELEGRAM_BOT_TOKEN=
 # Optional alternative OAuth provider for free workers.dev hosting
 GITHUB_CLIENT_ID=
 GITHUB_CLIENT_SECRET=
+
+# Optional Facebook Login (Meta Developers app with exact redirect URI)
+FACEBOOK_APP_ID=
+FACEBOOK_APP_SECRET=
+# Optional Sign in with X (OAuth 2.0 web app; X API access can incur charges)
+X_CLIENT_ID=
+X_CLIENT_SECRET=
+# Optional email OTP via Resend: sender must be on a verified domain.
+RESEND_API_KEY=
+EMAIL_FROM_ADDRESS=
+# Generate a unique 32-byte key, 64 hex characters; do not reuse webhook key.
+EMAIL_OTP_SECRET=
