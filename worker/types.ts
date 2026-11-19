@@ -20,7 +20,7 @@ export interface Env {
  RATE_LIMITER?: {limit(input:{key:string}):Promise<{success:boolean}>};
 }
 export interface Monitor {
- id: string; user_id: string; name: string; webhook_ciphertext: string; secret_hash: string;
+ id: string; user_id: string; name: string; webhook_ciphertext: string; secret_hash: string; verified_at: number | null;
  state: 'active' | 'paused'; health: string; interval_seconds: number; next_due: number;
  lock_until: number | null; last_run_id: string | null; failure_streak: number; last_checked: number | null;
  created_at: number; updated_at: number;
