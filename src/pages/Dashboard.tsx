@@ -2,7 +2,7 @@ import React,{ useCallback,useEffect,useMemo,useState } from 'react';
 import AuthOptions from '../components/AuthOptions';
 import { Activity, ArrowDownToLine, ArrowRight, Bell, Check, CheckCircle2, Clock3, ExternalLink, Fingerprint, LockKeyhole, PauseCircle, PlayCircle, Plus, RefreshCw, RotateCcw, ShieldCheck, Trash2, Webhook, XCircle } from 'lucide-react';
 type Me={id:string;email:string;name:string;avatar_url?:string;csrf_token:string};
-type Monitor={id:string;name:string;state:'active'|'paused';health:string;next_due:number;last_checked:number|null;failure_streak:number;interval_seconds:number};
+type Monitor={id:string;name:string;state:'active'|'paused';health:string;next_due:number;last_checked:number|null;failure_streak:number;interval_seconds:number;verified:boolean};
 type Run={id:string;state:string;source:string;created_at:number;confirmed_at:number|null;response_status:number|null;error_code:string|null;duration_ms:number|null};
 type Alert={id:string;kind:string;message:string;created_at:number;read_at:number|null};
 type Secret={callback_url:string;callback_secret:string};
