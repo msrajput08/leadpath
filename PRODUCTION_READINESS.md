@@ -24,10 +24,11 @@
 - Publish an actual support contact and operator-specific Privacy Policy and Terms; current pages are preliminary templates and need legal review.
 - Add ownership verification for Make webhook endpoints; a checkbox alone does not prove authorization and may enable credit abuse.
 - Dependency lockfile is now committed and CI uses npm ci; continue dependency vulnerability audits and scheduled updates.
-- Run browser E2E tests in a CI environment; existing Node tests use mocks and local SQLite, not live Cloudflare D1.
+- CI now executes Playwright Chromium smoke tests against a local Wrangler Worker with D1 migrations. Real Cloudflare/Make and multi-user browser E2E coverage remain unverified.
 - Add server-rendered/pre-rendered documentation and validate search indexing; client-only pages do not guarantee organic acquisition.
 - Confirm retention cleanup on Cloudflare cron and correct alert delivery under real errors.
 - Cloudflare Free rate limiting is per location, not a globally enforced anti-abuse policy or uptime SLA.
+- The Cron currently processes at most three due monitors every fifteen minutes. An ideal 6-hour cadence supports roughly seventy-two active monitors before scheduling backlog, excluding failures and overhead; capacity planning is required before broad signup.
 - LeadPath monitors the Make webhook onward, not the original website form or arbitrary CRM/email delivery.
 
 ## Rollout / rollback
