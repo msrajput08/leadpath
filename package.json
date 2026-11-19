@@ -12,7 +12,7 @@
     "test": "npm run typecheck:worker && npm run test:build && node --experimental-sqlite --test tests/*.test.mjs",
     "typecheck:worker": "tsc --project tsconfig.worker.json --noEmit",
     "test:build": "tsc --project tsconfig.worker.json --noEmit false --outDir .test-build && node scripts/copy-test-security.mjs",
-    "test:vitest": "vitest run tests/validators.test.ts",
+    "test:vitest": "vitest run tests/validators.test.ts tests/run-status.test.ts",
     "test:e2e": "playwright test"
   },
   "dependencies": {
