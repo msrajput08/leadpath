@@ -35,5 +35,20 @@
   ],
   "vars": {
     "BASE_URL": "https://leadpath.monty-08-raj.workers.dev"
+  },
+  "previews": {
+    "vars": {
+      "BASE_URL": "https://leadpath-preview.invalid"
+    },
+    "ratelimits": [
+      {
+        "name": "RATE_LIMITER",
+        "namespace_id": "910246",
+        "simple": {
+          "limit": 20,
+          "period": 60
+        }
+      }
+    ]
   }
 }
