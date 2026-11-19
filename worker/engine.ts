@@ -1,6 +1,6 @@
 import type { Env, Monitor, Run } from './types.js';
 import { json, now, readBoundedJson, InputError } from './util.js';
-import { CONFIRMATION_WINDOW_MS, decryptSecret, syntheticPayload, sha256, constantTimeEqual, validateMakeWebhook } from './security.mjs';
+import { CONFIRMATION_WINDOW_MS, decryptSecret, syntheticPayload, sha256, constantTimeEqual, validateMakeWebhook, webhookOwnershipProof } from './security.mjs';
 
 type SideEffect = { waitUntil(promise: Promise<unknown>): void };
 export const HOUR6 = 6*60*60*1000;
@@ -35,6 +35,7 @@ async function failRun(env: Env, runId: string, monitorId: string, state: 'uncon
 
 export async function runMonitor(env: Env, monitor: Monitor, source: 'manual'|'scheduled', ctx: SideEffect): Promise<{accepted:boolean;run_id?:string;message?:string}> {
  const time=now(); const runId=crypto.randomUUID();
+ if (source==='scheduled' && !monitor.verified_at) return {accepted:false,message:'Verify Make webhook ownership before automatic monitoring.'};
  if (source==='manual') {
   const recent=await env.DB.prepare("SELECT COUNT(*) AS total FROM runs WHERE monitor_id=? AND source='manual' AND created_at>=?").bind(monitor.id,time-86400000).first<{total:number}>();
   if ((recent?.total||0)>=3) return {accepted:false,message:'Free plan allows up to 3 manual runs in a rolling 24 hours.'};
@@ -65,10 +66,13 @@ export async function runMonitor(env: Env, monitor: Monitor, source: 'manual'|'s
  const callbackUrl=new URL(`/api/callback/${monitor.id}`,env.BASE_URL).toString();
  try {
   await env.DB.prepare("UPDATE runs SET trigger_sent_at=? WHERE id=? AND state='pending'").bind(now(),runId).run();
+  // Send a proof known only to the real webhook recipient for the first verification run.
+  const payload = syntheticPayload(runId,time,callbackUrl);
+  if (!monitor.verified_at) Object.assign(payload,{proof_code:await webhookOwnershipProof(runId,env.WEBHOOK_ENCRYPTION_KEY!)});
   // Never redirect: the URL is a secret, and redirecting to another host would expose its payload.
   const response=await fetch(target,{ method:'POST',redirect:'manual',signal:AbortSignal.timeout(8000),
    headers:{'Content-Type':'application/json','X-LeadPath-Test':'true'},
-   body:JSON.stringify(syntheticPayload(runId,time,callbackUrl)) });
+   body:JSON.stringify(payload) });
   const status=response.status;
   await env.DB.prepare('UPDATE runs SET response_status=?,trigger_accepted_at=? WHERE id=?').bind(status,response.ok?now():null,runId).run();
   if (!response.ok) await failRun(env,runId,monitor.id,'error',`HTTP_${status}`,ctx);
@@ -97,6 +101,15 @@ export async function confirmCallback(req: Request, env: Env, monitorId: string,
  if (!run) return json({error:'Unknown run'},404);
  if (run.state==='confirmed') return json({ok:true,run_id:runId,already_confirmed:true});
  if (run.state!=='pending' || run.expires_at<now()) return json({error:'Run no longer accepts confirmation'},409);
+ if (!monitor.verified_at) {
+  // The callback secret belongs to the user; it cannot prove control of an arbitrary
+  // Make webhook. The unpredictable HMAC is only delivered to the real Make endpoint.
+  const supplied = data.proof_code;
+  if (!env.WEBHOOK_ENCRYPTION_KEY || typeof supplied !== 'string' || !/^[a-f0-9]{64}$/.test(supplied) ||
+      !constantTimeEqual(supplied,await webhookOwnershipProof(runId,env.WEBHOOK_ENCRYPTION_KEY))) {
+   return json({error:'Make webhook ownership proof is required'},403);
+  }
+ }
  const time=now();
  // Atomic D1 transaction: confirmation, acknowledgment and health update cannot partially commit.
  const committed=await env.DB.batch<{meta:{changes:number}}>([
@@ -104,8 +117,8 @@ export async function confirmCallback(req: Request, env: Env, monitorId: string,
    .bind(time,time-run.created_at,runId,monitorId,time),
   env.DB.prepare("INSERT OR IGNORE INTO acknowledgments(run_id,monitor_id,received_at) SELECT id,monitor_id,? FROM runs WHERE id=? AND monitor_id=? AND state='confirmed'")
    .bind(time,runId,monitorId),
-  env.DB.prepare("UPDATE monitors SET failure_streak=0,health='healthy',updated_at=?,lock_until=NULL WHERE id=? AND last_run_id=? AND state='active' AND EXISTS(SELECT 1 FROM runs WHERE id=? AND monitor_id=? AND state='confirmed')")
-   .bind(time,monitorId,runId,runId,monitorId)
+  env.DB.prepare("UPDATE monitors SET failure_streak=0,health='healthy',verified_at=COALESCE(verified_at,?),updated_at=?,lock_until=NULL WHERE id=? AND last_run_id=? AND state='active' AND EXISTS(SELECT 1 FROM runs WHERE id=? AND monitor_id=? AND state='confirmed')")
+   .bind(time,time,monitorId,runId,runId,monitorId)
  ]);
  if (!committed[0]?.meta?.changes) return json({error:'Concurrent completion, retry to inspect status'},409);
  if (committed[2]?.meta?.changes && monitor.failure_streak>0) await emitAlert(env,monitor,runId,'recovery',ctx);
@@ -119,7 +132,7 @@ export async function sweepTimedOut(env: Env, ctx: SideEffect): Promise<void> {
 export async function scheduled(env: Env, ctx: SideEffect): Promise<void> {
  // Compact batches to keep daily free-tier D1 queries and cron CPU bounded.
  await sweepTimedOut(env,ctx);
- const due=await env.DB.prepare("SELECT * FROM monitors WHERE state='active' AND next_due<=? AND (lock_until IS NULL OR lock_until<?) ORDER BY next_due LIMIT 3")
+ const due=await env.DB.prepare("SELECT * FROM monitors WHERE state='active' AND verified_at IS NOT NULL AND next_due<=? AND (lock_until IS NULL OR lock_until<?) ORDER BY next_due LIMIT 3")
   .bind(now(),now()).all<Monitor>();
  for (const monitor of due.results) await runMonitor(env,monitor,'scheduled',ctx);
  // Daily cleanup only. Repeating historical DELETE queries every 15 min is costly in D1.
