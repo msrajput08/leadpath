@@ -7,6 +7,7 @@ import {confirmCallback,sweepTimedOut,scheduled,runMonitor} from '../.test-build
 import {sha256,newRandomString,encryptSecret} from '../worker/security.mjs';
 function makeDb(){
  const sql=new DatabaseSync(':memory:');sql.exec(fs.readFileSync(new URL('../db/migrations/0001_init.sql',import.meta.url),'utf8'));
+ sql.exec(fs.readFileSync(new URL('../db/migrations/0002_webhook_ownership.sql',import.meta.url),'utf8'));
  const db={
   prepare(s){const x={sql:s,args:[],bind(...v){this.args=v;return this;},async first(){return sql.prepare(this.sql).get(...this.args)||null;},async all(){return {results:sql.prepare(this.sql).all(...this.args),success:true};},async run(){const r=sql.prepare(this.sql).run(...this.args);return {success:true,meta:{changes:Number(r.changes)}};}};return x;},
   async batch(statements){sql.exec('BEGIN');try{const out=[];for(const stmt of statements)out.push(await stmt.run());sql.exec('COMMIT');return out;}catch(e){sql.exec('ROLLBACK');throw e;}},
@@ -57,15 +58,21 @@ test('local integration: account isolation, actual dispatch contract, callback, 
   const result=await dispatch.json();
   assert.equal(result.accepted,true);
   assert.equal(received.run_id,result.run_id);
+  assert.match(received.proof_code,/^[a-f0-9]{64}$/,'only real Make webhook recipient sees the proof');
   const before=await DB.prepare('SELECT state,trigger_accepted_at FROM runs WHERE id=?').bind(result.run_id).first();
   assert.equal(before.state,'pending','HTTP 200 alone never means delivered');
   assert.ok(before.trigger_accepted_at);
   const wrong=await confirmCallback(http(base+`/api/callback/${id}`,'POST',{run_id:result.run_id},'0'.repeat(64)),env,id,ctx);
   assert.equal(wrong.status,401);
-  const confirm=await confirmCallback(http(base+`/api/callback/${id}`,'POST',{run_id:result.run_id},secret),env,id,ctx);
+  const missingProof=await confirmCallback(http(base+`/api/callback/${id}`,'POST',{run_id:result.run_id},secret),env,id,ctx);
+  assert.equal(missingProof.status,403,'callback secret alone cannot prove webhook control');
+  const invalidProof=await confirmCallback(http(base+`/api/callback/${id}`,'POST',{run_id:result.run_id,proof_code:'0'.repeat(64)},secret),env,id,ctx);
+  assert.equal(invalidProof.status,403,'proof cannot be guessed from returned run ID');
+  const confirm=await confirmCallback(http(base+`/api/callback/${id}`,'POST',{run_id:result.run_id,proof_code:received.proof_code},secret),env,id,ctx);
   assert.equal(confirm.status,200);
   assert.equal((await confirm.json()).delivery,'destination_confirmed');
   assert.equal((await DB.prepare('SELECT state FROM runs WHERE id=?').bind(result.run_id).first()).state,'confirmed');
+  assert.ok((await DB.prepare('SELECT verified_at FROM monitors WHERE id=?').bind(id).first()).verified_at,'successful server-only proof persists verification');
   const replay=await confirmCallback(http(base+`/api/callback/${id}`,'POST',{run_id:result.run_id},secret),env,id,ctx);
   assert.equal((await replay.json()).already_confirmed,true);
   assert.equal((await DB.prepare('SELECT COUNT(*) as total FROM acknowledgments').first()).total,1);
@@ -107,6 +114,12 @@ test('scheduler claim is idempotent; upstream errors are not marked confirmed; p
  await DB.prepare("INSERT INTO monitors (id,user_id,name,webhook_ciphertext,secret_hash,state,health,interval_seconds,next_due,created_at,updated_at) VALUES(?,?,?,?,?,'active','configuration_required',21600,?,?,?)").bind(mid,uid,'Monitor',await encryptSecret('https://hook.eu1.make.com/AbcdEFgh123',key),await sha256(secret),t-1,t,t).run();
  const originalFetch=globalThis.fetch;globalThis.fetch=async()=>new Response('No',{status:503});
  try {
+  const unverified=await DB.prepare('SELECT * FROM monitors WHERE id=?').bind(mid).first();
+  const refused=await runMonitor(env,unverified,'scheduled',ctx);
+  assert.equal(refused.accepted,false,'unverified monitor cannot send unattended checks');
+  await scheduled(env,ctx);
+  assert.equal((await DB.prepare('SELECT COUNT(*) AS total FROM runs WHERE monitor_id=?').bind(mid).first()).total,0,'Cron must skip unverified webhooks');
+  await DB.prepare('UPDATE monitors SET verified_at=? WHERE id=?').bind(t,mid).run();
   const mon=await DB.prepare('SELECT * FROM monitors WHERE id=?').bind(mid).first();
   const first=await runMonitor(env,mon,'scheduled',ctx);
   assert.equal(first.accepted,true);
