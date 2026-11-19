@@ -15,6 +15,13 @@ export interface Env {
  GOOGLE_CLIENT_SECRET?: string;
  GITHUB_CLIENT_ID?: string;
  GITHUB_CLIENT_SECRET?: string;
+ FACEBOOK_APP_ID?: string;
+ FACEBOOK_APP_SECRET?: string;
+ X_CLIENT_ID?: string;
+ X_CLIENT_SECRET?: string;
+ RESEND_API_KEY?: string;
+ EMAIL_FROM_ADDRESS?: string;
+ EMAIL_OTP_SECRET?: string;
  WEBHOOK_ENCRYPTION_KEY?: string;
  TELEGRAM_BOT_TOKEN?: string;
  RATE_LIMITER?: {limit(input:{key:string}):Promise<{success:boolean}>};
