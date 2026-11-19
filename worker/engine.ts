@@ -17,7 +17,8 @@ async function emitAlert(env: Env, monitor: Monitor, runId: string, kind: 'failu
  ctx.waitUntil(fetch(`https://api.telegram.org/bot${env.TELEGRAM_BOT_TOKEN}/sendMessage`,{
   method:'POST',headers:{'content-type':'application/json'},body:JSON.stringify({chat_id:chatId,text:`LeadPath: ${message}`}),
   signal:AbortSignal.timeout(7000)
- }).then(()=>undefined).catch(()=>undefined));
+ }).then(result=>{ if(!result.ok) console.error('LeadPath Telegram notification rejected',result.status); })
+   .catch(()=>console.error('LeadPath Telegram notification transport failed')));
 }
 
 async function failRun(env: Env, runId: string, monitorId: string, state: 'unconfirmed'|'error', code: string, ctx: SideEffect): Promise<boolean> {
@@ -45,8 +46,8 @@ export async function runMonitor(env: Env, monitor: Monitor, source: 'manual'|'s
   .bind(time+HOUR6,time+60000,time,runId,time,monitor.id,threshold,time).run();
  if (!result.meta.changes) return {accepted:false,message:'Monitor paused, locked or in manual-test cooldown (15 minutes).'};
  try {
-  await env.DB.prepare("INSERT INTO runs (id,monitor_id,state,source,created_at,expires_at,trigger_sent_at) VALUES(?,?,'pending',?,?,?,?)")
-   .bind(runId,monitor.id,source,time,time+CONFIRMATION_WINDOW_MS,time).run();
+  await env.DB.prepare("INSERT INTO runs (id,monitor_id,state,source,created_at,expires_at) VALUES(?,?,'pending',?,?,?)")
+   .bind(runId,monitor.id,source,time,time+CONFIRMATION_WINDOW_MS).run();
  } catch {
   await env.DB.prepare("UPDATE monitors SET health='degraded',lock_until=NULL,next_due=? WHERE id=? AND last_run_id=?")
    .bind(time+MANUAL_COOLDOWN,monitor.id,runId).run();
@@ -63,6 +64,7 @@ export async function runMonitor(env: Env, monitor: Monitor, source: 'manual'|'s
  }
  const callbackUrl=new URL(`/api/callback/${monitor.id}`,env.BASE_URL).toString();
  try {
+  await env.DB.prepare("UPDATE runs SET trigger_sent_at=? WHERE id=? AND state='pending'").bind(now(),runId).run();
   // Never redirect: the URL is a secret, and redirecting to another host would expose its payload.
   const response=await fetch(target,{ method:'POST',redirect:'manual',signal:AbortSignal.timeout(8000),
    headers:{'Content-Type':'application/json','X-LeadPath-Test':'true'},
