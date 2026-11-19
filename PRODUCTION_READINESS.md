@@ -23,7 +23,7 @@
 ## Unresolved blockers for general public release
 - Publish an actual support contact and operator-specific Privacy Policy and Terms; current pages are preliminary templates and need legal review.
 - Add ownership verification for Make webhook endpoints; a checkbox alone does not prove authorization and may enable credit abuse.
-- Add a committed dependency lockfile and switch CI to npm ci for reproducible builds; currently npm install resolves semver ranges.
+- Dependency lockfile is now committed and CI uses npm ci; continue dependency vulnerability audits and scheduled updates.
 - Run browser E2E tests in a CI environment; existing Node tests use mocks and local SQLite, not live Cloudflare D1.
 - Add server-rendered/pre-rendered documentation and validate search indexing; client-only pages do not guarantee organic acquisition.
 - Confirm retention cleanup on Cloudflare cron and correct alert delivery under real errors.
