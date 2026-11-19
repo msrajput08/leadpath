@@ -123,9 +123,22 @@ test('scheduler claim is idempotent; upstream errors are not marked confirmed; p
   assert.equal((await DB.prepare('SELECT state FROM runs WHERE id=?').bind(expiredId).first()).state,'unconfirmed');
   const old=await confirmCallback(http(`https://leadpath.example/api/callback/${mid}`,'POST',{run_id:expiredId},secret),env,mid,ctx);
   assert.equal(old.status,409);
-  await DB.prepare("UPDATE monitors SET state='paused' WHERE id=?").bind(mid).run();
+  await DB.prepare("UPDATE monitors SET state='paused',health='paused' WHERE id=?").bind(mid).run();
   const paused=await runMonitor(env,await DB.prepare('SELECT * FROM monitors WHERE id=?').bind(mid).first(),'manual',ctx);
   assert.equal(paused.accepted,false);
+  // A callback for an in-flight run may still arrive after an operator pauses monitoring.
+  const pausedRunId=crypto.randomUUID();
+  await DB.prepare("INSERT INTO runs(id,monitor_id,state,source,created_at,expires_at) VALUES(?,?,'pending','manual',?,?)").bind(pausedRunId,mid,t,t+600000).run();
+  await DB.prepare("UPDATE monitors SET last_run_id=? WHERE id=?").bind(pausedRunId,mid).run();
+  const pausedCallback=await confirmCallback(http(`https://leadpath.example/api/callback/${mid}`,'POST',{run_id:pausedRunId},secret),env,mid,ctx);
+  assert.equal(pausedCallback.status,200);
+  assert.equal((await DB.prepare('SELECT health FROM monitors WHERE id=?').bind(mid).first()).health,'paused','late confirmation must not resume a paused monitor');
+  const pausedExpiredId=crypto.randomUUID();
+  await DB.prepare("INSERT INTO runs(id,monitor_id,state,source,created_at,expires_at) VALUES(?,?,'pending','manual',?,?)").bind(pausedExpiredId,mid,t-3600000,t-1).run();
+  await DB.prepare('UPDATE monitors SET last_run_id=? WHERE id=?').bind(pausedExpiredId,mid).run();
+  await sweepTimedOut(env,ctx);
+  assert.equal((await DB.prepare('SELECT state FROM runs WHERE id=?').bind(pausedExpiredId).first()).state,'unconfirmed');
+  assert.equal((await DB.prepare('SELECT health FROM monitors WHERE id=?').bind(mid).first()).health,'paused','late timeout must not resume a paused monitor');
   await assert.rejects(DB.prepare("INSERT INTO monitors (id,user_id,name,webhook_ciphertext,secret_hash,state,health,interval_seconds,next_due,created_at,updated_at) VALUES(?,?,?,?,?,'active','configuration_required',21600,?,?,?)").bind(crypto.randomUUID(),uid,'Second','cipher','hash',t,t,t).run(),/UNIQUE/);
  }finally{globalThis.fetch=originalFetch;DB.sql.close();}
 });
