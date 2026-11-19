@@ -2,6 +2,8 @@ import type { Env } from './types.js';
 import { json, fail, InputError } from './util.js';
 import { authStart, authCallback, authLogout, githubStart, githubCallback } from './auth.js';
 import { handleApi } from './api.js';
+import { socialStart, socialCallback } from './social.js';
+import { emailRequest, emailVerify } from './email-auth.js';
 import { confirmCallback, scheduled } from './engine.js';
 
 type Ctx = {waitUntil(promise:Promise<unknown>):void};
@@ -21,7 +23,10 @@ export default {
    if (!env.BASE_URL) return hardened(fail(503,'BASE_URL not configured'));
    // Protect both OAuth providers and public diagnostics before database access.
    if ((((path==='/auth/google/start'||path==='/auth/google/callback'||
-           path==='/auth/github/start'||path==='/auth/github/callback') && req.method==='GET')
+           path==='/auth/github/start'||path==='/auth/github/callback'||
+           path==='/auth/facebook/start'||path==='/auth/facebook/callback'||
+           path==='/auth/x/start'||path==='/auth/x/callback') && req.method==='GET')
+         || ((path==='/auth/email/request'||path==='/auth/email/verify') && req.method==='POST')
          || (path==='/api/public/status' && req.method==='GET')) && env.RATE_LIMITER) {
     const key=(path.startsWith('/auth/')?'auth:':'public-status:')+(req.headers.get('CF-Connecting-IP')||'anonymous');
     if (!(await env.RATE_LIMITER.limit({key})).success) return hardened(fail(429,'Rate limit reached. Try again shortly.'));
@@ -30,6 +35,12 @@ export default {
    if (path==='/auth/google/callback' && req.method==='GET') return hardened(await authCallback(req,env));
    if (path==='/auth/github/start' && req.method==='GET') return hardened(await githubStart(env));
    if (path==='/auth/github/callback' && req.method==='GET') return hardened(await githubCallback(req,env));
+   if (path==='/auth/facebook/start' && req.method==='GET') return hardened(await socialStart(env,'facebook'));
+   if (path==='/auth/facebook/callback' && req.method==='GET') return hardened(await socialCallback(req,env,'facebook'));
+   if (path==='/auth/x/start' && req.method==='GET') return hardened(await socialStart(env,'x'));
+   if (path==='/auth/x/callback' && req.method==='GET') return hardened(await socialCallback(req,env,'x'));
+   if (path==='/auth/email/request' && req.method==='POST') return hardened(await emailRequest(req,env));
+   if (path==='/auth/email/verify' && req.method==='POST') return hardened(await emailVerify(req,env));
    if (path==='/auth/logout' && req.method==='POST') return hardened(await authLogout(req,env));
    const cb=path.match(/^\/api\/callback\/([a-f0-9-]{36})$/);
    if (cb && req.method==='POST') return hardened(await confirmCallback(req,env,cb[1],ctx));
