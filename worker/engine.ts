@@ -26,9 +26,9 @@ async function failRun(env: Env, runId: string, monitorId: string, state: 'uncon
  if (!changed.meta.changes) return false;
  const row=await env.DB.prepare('SELECT * FROM monitors WHERE id=?').bind(monitorId).first<Monitor>();
  if (!row || row.last_run_id!==runId) return true;
- await env.DB.prepare("UPDATE monitors SET failure_streak=failure_streak+1,health=CASE WHEN failure_streak>=1 THEN 'failing' ELSE 'degraded' END,updated_at=?,lock_until=NULL WHERE id=? AND last_run_id=?")
+ const updated=await env.DB.prepare("UPDATE monitors SET failure_streak=failure_streak+1,health=CASE WHEN failure_streak>=1 THEN 'failing' ELSE 'degraded' END,updated_at=?,lock_until=NULL WHERE id=? AND last_run_id=? AND state='active'")
   .bind(now(),monitorId,runId).run();
- if (row.failure_streak===1) await emitAlert(env,row,runId,'failure',ctx);
+ if (updated.meta.changes && row.failure_streak===1) await emitAlert(env,row,runId,'failure',ctx);
  return true;
 }
 
@@ -102,7 +102,7 @@ export async function confirmCallback(req: Request, env: Env, monitorId: string,
    .bind(time,time-run.created_at,runId,monitorId,time),
   env.DB.prepare("INSERT OR IGNORE INTO acknowledgments(run_id,monitor_id,received_at) SELECT id,monitor_id,? FROM runs WHERE id=? AND monitor_id=? AND state='confirmed'")
    .bind(time,runId,monitorId),
-  env.DB.prepare("UPDATE monitors SET failure_streak=0,health='healthy',updated_at=?,lock_until=NULL WHERE id=? AND last_run_id=? AND EXISTS(SELECT 1 FROM runs WHERE id=? AND monitor_id=? AND state='confirmed')")
+  env.DB.prepare("UPDATE monitors SET failure_streak=0,health='healthy',updated_at=?,lock_until=NULL WHERE id=? AND last_run_id=? AND state='active' AND EXISTS(SELECT 1 FROM runs WHERE id=? AND monitor_id=? AND state='confirmed')")
    .bind(time,monitorId,runId,runId,monitorId)
  ]);
  if (!committed[0]?.meta?.changes) return json({error:'Concurrent completion, retry to inspect status'},409);
