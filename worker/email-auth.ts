@@ -25,7 +25,7 @@ function makeCode():string {
  do {value=crypto.getRandomValues(new Uint32Array(1))[0];} while(value>=limit);
  return String(value%900000+100000);
 }
-const generic=json({ok:true,message:'If email delivery is available, a 6-digit sign-in code has been sent.'});
+const generic=()=>json({ok:true,message:'If email delivery is available, a 6-digit sign-in code has been sent.'});
 
 export async function emailRequest(req:Request,env:Env):Promise<Response> {
  if(!emailReady(env))return fail(503,'Email sign-in is not configured');
@@ -34,7 +34,7 @@ export async function emailRequest(req:Request,env:Env):Promise<Response> {
  const email=normalize(payload.email);
  if(!email)return fail(400,'Enter a valid email address');
  // Both the edge limiter and the persistent database gate protect sending quotas.
- if(env.RATE_LIMITER && !(await env.RATE_LIMITER.limit({key:'email-send:'+await sha256(email)})).success) return generic;
+ if(env.RATE_LIMITER && !(await env.RATE_LIMITER.limit({key:'email-send:'+await sha256(email)})).success) return generic();
  const t=now(),code=makeCode(),hash=await otpHash(email,code,env.EMAIL_OTP_SECRET!);
  const stored=await env.DB.prepare(
   'INSERT INTO email_login_codes(email,code_hash,expires_at,attempts,sent_at,daily_window,daily_count) '+
@@ -44,7 +44,7 @@ export async function emailRequest(req:Request,env:Env):Promise<Response> {
   'daily_count=CASE WHEN email_login_codes.daily_window<? THEN 1 ELSE email_login_codes.daily_count+1 END '+
   'WHERE email_login_codes.sent_at<=? AND (email_login_codes.daily_window<? OR email_login_codes.daily_count<5)'
  ).bind(email,hash,t+600000,t,t,t-86400000,t-86400000,t-60000,t-86400000).run();
- if(!stored.meta.changes)return generic;
+ if(!stored.meta.changes)return generic();
  let sent=false;
  try {
   const delivery=await fetch('https://api.resend.com/emails',{
@@ -61,7 +61,7 @@ export async function emailRequest(req:Request,env:Env):Promise<Response> {
   await env.DB.prepare('DELETE FROM email_login_codes WHERE email=? AND code_hash=?').bind(email,hash).run();
   return fail(503,'Email service is unavailable. Please try another sign-in method.');
  }
- return generic;
+ return generic();
 }
 
 export async function emailVerify(req:Request,env:Env):Promise<Response> {
