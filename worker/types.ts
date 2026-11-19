@@ -19,6 +19,10 @@ export interface Env {
  FACEBOOK_APP_SECRET?: string;
  X_CLIENT_ID?: string;
  X_CLIENT_SECRET?: string;
+ BREVO_API_KEY?: string;
+ BREVO_SENDER_EMAIL?: string;
+ BREVO_SENDER_NAME?: string;
+ ENABLE_EMAIL_OTP?: string;
  RESEND_API_KEY?: string;
  EMAIL_FROM_ADDRESS?: string;
  EMAIL_OTP_SECRET?: string;
