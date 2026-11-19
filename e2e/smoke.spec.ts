@@ -17,7 +17,7 @@ test('broken JSON reports actual syntax failure',async({page})=>{
 });
 test('dashboard shows sign-in without a session',async({page})=>{
  await page.goto('/dashboard');
- await expect(page.getByText(/No sign-in providers are configured|Continue with Google|Email\/password sign-in will be available/i)).toBeVisible();
+ await expect(page.getByText(/No sign-in providers are configured/i)).toBeVisible();
 });
 test('premium signup can send verification and login keeps OAuth providers',async({page})=>{
  await page.route('**/api/public/status',route=>route.fulfill({
