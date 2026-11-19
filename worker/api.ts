@@ -2,6 +2,7 @@ import type { Env, Monitor, Session } from './types.js';
 import { json, fail, getSession, mustBeSameOrigin, csrfOk, readSmallJson, publicMonitor, audit, now } from './util.js';
 import { newRandomString, sha256, encryptSecret, validateMakeWebhook } from './security.mjs';
 import { runMonitor } from './engine.js';
+import { emailLoginConfigured } from './email-auth.js';
 
 type Context = { waitUntil(promise: Promise<unknown>): void };
 const isId=(value:string)=>/^[0-9a-f-]{36}$/.test(value);
@@ -36,10 +37,10 @@ export async function handleApi(req:Request,env:Env,ctx:Context):Promise<Respons
       // Do not expose SQL errors, provider credentials or database details publicly.
     }
   }
-  return json({online:true,google_auth_configured:!!(env.GOOGLE_CLIENT_ID&&env.GOOGLE_CLIENT_SECRET),github_auth_configured:!!(env.GITHUB_CLIENT_ID&&env.GITHUB_CLIENT_SECRET),db_binding_configured,db_schema_ready,version:'0.1.0'});
+  return json({online:true,google_auth_configured:!!(env.GOOGLE_CLIENT_ID&&env.GOOGLE_CLIENT_SECRET),github_auth_configured:!!(env.GITHUB_CLIENT_ID&&env.GITHUB_CLIENT_SECRET),facebook_auth_configured:!!(env.FACEBOOK_APP_ID&&env.FACEBOOK_APP_SECRET),x_auth_configured:!!(env.X_CLIENT_ID&&env.X_CLIENT_SECRET),email_auth_configured:emailLoginConfigured(env),db_binding_configured,db_schema_ready,version:'0.1.0'});
  }
  const session=await getSession(req,env);
- if (!session) return fail(401,'Sign in with Google to access your dashboard.');
+ if (!session) return fail(401,'Sign in to access your dashboard.');
  if (env.RATE_LIMITER && !(await env.RATE_LIMITER.limit({key:'user:'+session.user_id})).success) return fail(429,'Too many API requests; try again shortly.');
  if (req.method!=='GET' && (!mustBeSameOrigin(req,env) || !csrfOk(req,session))) return fail(403,'CSRF protection failed. Reload the page.');
  const userId=session.user_id;

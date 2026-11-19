@@ -17,5 +17,25 @@ test('broken JSON reports actual syntax failure',async({page})=>{
 });
 test('dashboard shows sign-in without a session',async({page})=>{
  await page.goto('/dashboard');
- await expect(page.getByText(/sign-in is not configured|Continue with Google|Continue with GitHub/i)).toBeVisible();
+ await expect(page.getByText(/No sign-in providers are configured|Continue with Google|Continue with GitHub/i)).toBeVisible();
+});
+
+test('all configured sign-in methods render and email OTP offers a code form',async({page})=>{
+ await page.route('**/api/public/status',route=>route.fulfill({
+  status:200,contentType:'application/json',body:JSON.stringify({
+   online:true,google_auth_configured:true,github_auth_configured:true,
+   facebook_auth_configured:true,x_auth_configured:true,email_auth_configured:true
+  })
+ }));
+ await page.route('**/auth/email/request',route=>route.fulfill({
+  status:200,contentType:'application/json',body:JSON.stringify({ok:true})
+ }));
+ await page.goto('/login');
+ await expect(page.getByRole('link',{name:/Continue with Google/i})).toBeVisible();
+ await expect(page.getByRole('link',{name:/Continue with Facebook/i})).toBeVisible();
+ await expect(page.getByRole('link',{name:/Continue with X/i})).toBeVisible();
+ await expect(page.getByRole('link',{name:/Continue with GitHub/i})).toBeVisible();
+ await page.getByLabel('Email address').fill('person@example.test');
+ await page.getByRole('button',{name:/Send sign-in code/i}).click();
+ await expect(page.getByLabel('6-digit code')).toBeVisible();
 });

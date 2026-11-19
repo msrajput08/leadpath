@@ -199,3 +199,7 @@ At three one-credit Make modules: four scheduled runs/day × 3 credits × 30 day
 ## License
 
 MIT, see [`LICENSE`](LICENSE). No dependency licenses are copied or redistributed. Review actual installed dependencies and lock versions after the first successful `npm install` before production release.
+
+## Multi-provider sign-in
+
+The login UI supports Google, GitHub, Facebook, X and passwordless Email OTP, but shows only providers configured on the server. GitHub remains the current tested production fallback. See [authentication setup and migration rollout](docs/authentication.md). Facebook and X require developer credentials/approval; X profile API calls may have usage charges. Email OTP requires a verified sender domain plus a transactional email provider such as Resend. New email challenges require D1 migration `0003_email_otp.sql` to be applied remotely before deploying the new Worker. Accounts created through different sign-in methods are intentionally not auto-linked by email.

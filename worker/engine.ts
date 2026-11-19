@@ -139,6 +139,7 @@ export async function scheduled(env: Env, ctx: SideEffect): Promise<void> {
  const time=now(); const utc=new Date(time);
  if (utc.getUTCHours()===0 && utc.getUTCMinutes()===0) {
   await env.DB.prepare('DELETE FROM oauth_states WHERE expires_at<?').bind(time).run();
+  await env.DB.prepare('DELETE FROM email_login_codes WHERE expires_at<?').bind(time).run();
   await env.DB.prepare('DELETE FROM sessions WHERE expires_at<?').bind(time).run();
   await env.DB.prepare('DELETE FROM runs WHERE created_at<?').bind(time-90*86400000).run();
   await env.DB.prepare('DELETE FROM audit_events WHERE occurred_at<?').bind(time-365*86400000).run();
