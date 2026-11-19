@@ -5,6 +5,7 @@ export function validateMakeWebhook(raw: unknown): { ok: boolean; error?: string
 export function validateJsonSample(raw: unknown): { ok: boolean; error?: string; keys?: number; hasRunId?: boolean; warnings?: string[] };
 export function newRandomString(bytes?: number): string;
 export function sha256(s: string): Promise<string>;
+export function webhookOwnershipProof(runId: string, keyHex: string): Promise<string>;
 export function constantTimeEqual(a: unknown, b: unknown): boolean;
 export function encryptSecret(s: string, key: string): Promise<string>;
 export function decryptSecret(s: string, key: string): Promise<string>;

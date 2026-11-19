@@ -57,8 +57,8 @@ export async function readBoundedJson(req: Request, maxBytes = 8192): Promise<Re
 }
 export const readSmallJson = (req:Request) => readBoundedJson(req,8192);
 export function publicMonitor(row: Record<string, unknown>) {
- const { id, name, state, health, interval_seconds, next_due, last_checked, failure_streak, created_at } = row;
- return { id, name, state, health, interval_seconds, next_due, last_checked, failure_streak, created_at, endpoint: 'Make custom webhook (URL redacted)' };
+ const { id, name, state, health, interval_seconds, next_due, last_checked, failure_streak, created_at, verified_at } = row;
+ return { id, name, state, health, interval_seconds, next_due, last_checked, failure_streak, created_at, verified: typeof verified_at === 'number', endpoint: 'Make custom webhook (URL redacted)' };
 }
 export async function audit(env: Env, userId: string, action: string, targetId?: string) {
  await env.DB.prepare('INSERT INTO audit_events (id,user_id,action,target_id,occurred_at) VALUES(?,?,?,?,?)')

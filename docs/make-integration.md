@@ -21,15 +21,22 @@
    - Header `Content-Type: application/json`
    - Header `Authorization: Bearer YOUR_ONE_TIME_SECRET`
    - Body type: raw JSON
-   - JSON body: `{"run_id":"<MAP THE run_id RECEIVED BY WEBHOOK>"}`
+   - JSON body for **new, not-yet-verified monitors**: `{"run_id":"<MAP run_id FROM WEBHOOK>","proof_code":"<MAP proof_code FROM WEBHOOK>"}`
+   - The server sends `proof_code` **only in its first verification requests to an unverified webhook**. It is not available from the LeadPath dashboard or API. Map the received field from the webhook module (never type a fixed value). For previously verified monitors, the callback can remain `{"run_id":"<MAP run_id>"}`.
    - Do **not** put `YOUR_ONE_TIME_SECRET` in the request body, URL, Google Sheets cells or screenshots.
-4. Make's mapping syntax differs by module; use the mapping UI to insert `run_id` from module 1 instead of typing a literal token. The callback field name must be exactly `run_id`.
-5. Click Run test on the LeadPath dashboard. A successful result means:
+4. Make's mapping syntax differs by module; use the mapping UI to insert `run_id` and `proof_code` from module 1 instead of typing literal tokens. The callback fields must be exactly `run_id` and `proof_code`. Keep `proof_code` out of Google Sheets cells, public logs, screenshots and URLs. It's a temporary verification challenge, not the long-lived callback Bearer secret.
+5. Click Run test on the LeadPath dashboard. **The first successful proof echoes the server's private webhook challenge and activates automatic six-hour checks.** A successful result means:
    - LeadPath created a new run ID.
    - The Make webhook received the synthetic payload.
    - The test row is visible in your test Sheet.
    - LeadPath received an authenticated callback for that same run ID within 30 minutes.
    - The status changed to **Confirmed**.
+
+## Webhook ownership verification
+
+A user's checkbox alone does not prove control of an endpoint. Newly created monitors must echo the unpredictable server-generated `proof_code` back from the *actual Make webhook execution* using the authenticated callback. The secret proof is never returned in run status or manual-test API responses, so manually posting the run ID and Bearer secret without receiving the Make webhook cannot activate unattended checks.
+
+Only one authorized manual verification request can be made at a time; manual cooldown and daily quotas still apply. **Unverified monitors are excluded from all scheduled Cron tests.** Existing monitors with a previously confirmed run are automatically recognized by the database migration and require no change to their old Make callback.
 
 ## Deliberate failure test
 

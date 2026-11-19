@@ -65,7 +65,7 @@ export async function handleApi(req:Request,env:Env,ctx:Context):Promise<Respons
   await audit(env,userId,'monitor_created',id);
   return json({ monitor:{id,name,state:'active',health:'configuration_required',interval_seconds:21600,next_due:time+6*3600000},
    callback_url:new URL(`/api/callback/${id}`,env.BASE_URL).toString(),callback_secret:callbackSecret,
-   instructions:'Save this secret now: it will never be shown again. Configure Make HTTP POST after Google Sheets success.' },201);
+   instructions:'Save this secret now: it will never be shown again. For first-time Make webhook verification, map both run_id and proof_code from the incoming webhook into the HTTP callback body after Google Sheets succeeds.' },201);
  }
  const match=pathname.match(/^\/api\/monitors\/([^/]+)(?:\/(runs|run|rotate))?$/);
  if (match) {
