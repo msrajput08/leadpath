@@ -14,3 +14,16 @@ jobs:
       - run: npm test
       - run: npm run test:vitest
       - run: npm run build
+      - run: npm audit --omit=dev --audit-level=high
+      - run: npm run db:local
+      - run: npx playwright install --with-deps chromium
+      - name: Browser smoke tests against the local Cloudflare Worker
+        run: |
+          npx wrangler dev --port 8787 > /tmp/leadpath-worker.log 2>&1 &
+          READY=0
+          for i in $(seq 1 40); do
+            if curl -fsS http://127.0.0.1:8787/api/public/status; then READY=1; break; fi
+            sleep 1
+          done
+          if [ "$READY" -ne 1 ]; then cat /tmp/leadpath-worker.log; exit 1; fi
+          npm run test:e2e
