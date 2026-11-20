@@ -32,3 +32,7 @@ CI simulations validate our implementation but do **not** prove Google, Supabase
 7. Confirm search indexing for client-rendered content; consider pre-rendered public pages.
 
 **Never advertise guaranteed delivery, zero lead loss, zero cost outside third-party quotas, or live results based solely on mocked test fixtures.**
+
+## SEO release evidence and limits
+
+PR #12 adds build-time prerendering of 16 public pages, page-specific metadata, internal article links, JSON-LD and tests for raw HTML, real 404s, sitemap, and private noindex. CI evidence applies once the latest PR/head workflow passes. Google Search Console property verification, production crawling, rankings and real organic traffic are **not verified**. See [SEO release guide](docs/seo-release.md).

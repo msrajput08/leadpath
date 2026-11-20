@@ -112,13 +112,13 @@ test('pricing only shows the actually available free product, and no invented up
 test('public pages have canonical URLs while auth and private routes explicitly opt out of indexing',async({page})=>{
  await page.goto('/contact');
  await expect(page.locator('meta[name="robots"]')).toHaveAttribute('content','index, follow');
- await expect(page.locator('link[rel="canonical"]')).toHaveAttribute('href',new URL('/contact',page.url()).href);
- await expect(page.locator('meta[name="description"]')).toHaveAttribute('content',/Contact LeadPath support/i);
+ await expect(page.locator('link[rel="canonical"]')).toHaveAttribute('href','https://leadpath.monty-08-raj.workers.dev/contact');
+ await expect(page.locator('meta[name="description"]')).toHaveAttribute('content',/Get help with your LeadPath account/i);
  await page.goto('/signup');
  await expect(page.locator('meta[name="robots"]')).toHaveAttribute('content','noindex, nofollow');
  await page.goto('/reset-password');
  await expect(page.locator('meta[name="robots"]')).toHaveAttribute('content','noindex, nofollow');
- await expect(page.locator('link[rel="canonical"]')).toHaveAttribute('href',new URL('/',page.url()).href);
+ await expect(page.locator('link[rel="canonical"]')).toHaveCount(0);
 });
 test('documentation links resolve to meaningful articles rather than empty placeholder pages',async({page})=>{
  await page.goto('/docs');
@@ -129,5 +129,63 @@ test('documentation links resolve to meaningful articles rather than empty place
   await page.goto(link!);
   await expect(page.getByRole('heading',{name:/Steps to diagnose/i})).toBeVisible();
   await expect(page.locator('.guide-detail ol li').first()).toBeVisible();
+ }
+});
+
+test('public routes expose complete HTML and metadata before browser-side JavaScript runs',async({request})=>{
+ const routes=['/','/how-it-works','/features','/pricing','/checker','/docs','/faq','/contact','/privacy','/terms',
+ '/docs/webflow-make','/docs/make-sheets','/docs/crm-missing','/docs/webhook-200','/docs/silent-failures','/docs/free-monitoring'];
+ const titles=new Set<string>();
+ for(const route of routes){
+  const response=await request.get(route);
+  expect(response.status(),route).toBe(200);
+  const html=await response.text();
+  expect(html,route).toContain('data-prerendered="true"');
+  expect(html,route).toMatch(/<h1\b[^>]*>/);
+  const title=html.match(/<title>(.*?)<\/title>/)?.[1];
+  expect(title,route).toBeTruthy();
+  titles.add(title!);
+  expect(html,route).toContain('<meta name="robots" content="index, follow"/>');
+  expect(html,route).toContain('<link rel="canonical" href="https://leadpath.monty-08-raj.workers.dev'+route+'"/>');
+  expect(html,route).toContain('<script type="application/ld+json">');
+  expect(html,route).not.toContain('DRAFT FOR LAUNCH REVIEW');
+ }
+ expect(titles.size).toBe(routes.length);
+ const sitemap=await request.get('/sitemap.xml');
+ expect(sitemap.status()).toBe(200);
+ const xml=await sitemap.text();
+ for(const route of routes)expect(xml).toContain('<loc>https://leadpath.monty-08-raj.workers.dev'+route+'</loc>');
+ expect((xml.match(/<url>/g)||[]).length).toBe(routes.length);
+});
+test('private routes remain noindex, known pages hydrate and missing pages return true 404',async({page,request})=>{
+ for(const route of ['/login','/signup','/reset-password','/verify-email','/dashboard','/account']){
+  const response=await request.get(route);
+  expect(response.status(),route).toBe(200);
+  const html=await response.text();
+  expect(html,route).toContain('<meta name="robots" content="noindex, nofollow"/>');
+  expect(html,route).not.toContain('data-prerendered="true"');
+  expect(html,route).not.toContain('<link rel="canonical"');
+ }
+ await page.goto('/');
+ await expect(page.getByRole('button',{name:'Switch to light mode'})).toBeVisible();
+ await page.goto('/docs');
+ await expect(page.getByRole('heading',{name:/Guides that solve real problems/i})).toBeVisible();
+ const missing=await request.get('/this-page-does-not-exist');
+ expect(missing.status()).toBe(404);
+ expect(await missing.text()).toContain('Page not found');
+ const robots=await (await request.get('/robots.txt')).text();
+ expect(robots).toContain('Disallow: /api/');
+ expect(robots).not.toContain('Disallow: /signup');
+});
+test('JSON-LD is parseable and matches visible software and documentation offering',async({request})=>{
+ for(const route of ['/','/docs/make-sheets']){
+  const html=await (await request.get(route)).text();
+  const raw=html.match(/<script type="application\/ld\+json">([\s\S]*?)<\/script>/)?.[1];
+  expect(raw).toBeTruthy();
+  const schema=JSON.parse(raw!);
+  expect(schema['@context']).toBe('https://schema.org');
+  expect(schema['@graph'].some((item:{'@type':string})=>item['@type']==='WebPage')).toBeTruthy();
+  if(route==='/')expect(schema['@graph'].find((item:{'@type':string})=>item['@type']==='WebApplication').offers.price).toBe('0');
+  else expect(schema['@graph'].some((item:{'@type':string})=>item['@type']==='BreadcrumbList')).toBeTruthy();
  }
 });

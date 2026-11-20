@@ -22,7 +22,7 @@
 6. Validate mobile/browser accessibility, real Cloudflare response headers, security logs and alert delivery on the deployed version.
 7. Export a D1 backup (and perform a restore drill in a separate disposable database), rehearse rollback, confirm that build and logs disclose no secrets.
 8. Review Terms/Privacy for the legally responsible operator, applicable jurisdiction, data-rights obligations and required business notices. Do not fabricate a legal entity or governing jurisdiction.
-9. Submit the real sitemap to Google Search Console and verify live crawling/indexing. React SPA content may not be indexed reliably without HTML pre-rendering or SSR.
+9. Public pages are now prerendered at build time with metadata, canonical and JSON-LD. Submit the sitemap to Google Search Console and independently verify live crawling, indexing, redirects and Core Web Vitals; these external results are not established by CI.
 
 ## Known product limits
 

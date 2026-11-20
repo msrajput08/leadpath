@@ -1,5 +1,8 @@
 import React from 'react';
-import { createRoot } from 'react-dom/client';
+import {createRoot,hydrateRoot} from 'react-dom/client';
 import App from './App';
 import './styles.css';
-createRoot(document.getElementById('root')!).render(<React.StrictMode><App/></React.StrictMode>);
+const root=document.getElementById('root')!;
+const tree=<React.StrictMode><App/></React.StrictMode>;
+if(root.dataset.prerendered==='true')hydrateRoot(root,tree);
+else createRoot(root).render(tree);
