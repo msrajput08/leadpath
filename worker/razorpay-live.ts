@@ -22,11 +22,12 @@ export function liveCheckoutReady(env:Env):boolean {
  // No live charge can be attempted accidentally by deploying the code or configuring keys alone.
  const pilotMax=Number(env.LIVE_MAX_PAID_ACCOUNTS);
  const batch=Number(env.SCHEDULE_BATCH_LIMIT);
- return liveApiReady(env)&&env.LIVE_BILLING_ENABLED==='true'&&
+ // Initial paid release offers Starter only to one account; Pro requires a separate capacity audit.
+ return env.LIVE_PILOT_PLAN==='starter'&&liveApiReady(env)&&env.LIVE_BILLING_ENABLED==='true'&&
   env.LIVE_BILLING_WEBHOOKS_ENABLED==='true'&&!!env.RAZORPAY_LIVE_WEBHOOK_SECRET&&
   env.PAID_ENTITLEMENTS_ENABLED==='true'&&env.LIVE_CAPACITY_REVIEWED==='true'&&
   Number.isInteger(pilotMax)&&pilotMax===1&&
-  Number.isInteger(batch)&&batch>=30&&batch<=40;
+  Number.isInteger(batch)&&batch>=6&&batch<=10;
 }
 
 class ProviderError extends Error {
@@ -64,6 +65,7 @@ export async function createLiveSubscription(env:Env,userId:string,req:Request):
  if(!liveCheckoutReady(env))return fail(503,'Live billing is not enabled or monitoring capacity was not approved.');
  const body=await readSmallJson(req),code=body.plan_code;
  if(code!=='starter'&&code!=='pro')return fail(400,'Choose Starter or Pro.');
+ if(code!=='starter')return fail(403,'Pro subscriptions are not available in the limited launch.');
  const existing=await env.DB.prepare(`SELECT id FROM user_subscriptions WHERE user_id=? AND billing_mode='live'
   AND status IN ('pending','active','past_due') LIMIT 1`).bind(userId).first();
  if(existing)return fail(409,'A live subscription is already attached to this account. Cancel or contact support first.');
