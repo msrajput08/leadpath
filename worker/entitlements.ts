@@ -70,12 +70,12 @@ export async function billingOverview(env:Env,userId:string) {
  ]);
  const liveEnabled=liveCheckoutReady(env);
  return {current,plans:plans.results.map(mapPlan).map(p=>({
-   ...p,available_for_purchase:liveEnabled&&p.code!=='free',
-   operationally_available:p.code==='free'||liveEnabled
+   ...p,available_for_purchase:liveEnabled&&p.code==='starter',
+   operationally_available:p.code==='free'||(liveEnabled&&p.code==='starter')
   })),monitor_count:count?.total||0,
   usage:{scheduled_checks:usage?.scheduled_checks||0,manual_checks:usage?.manual_checks||0},
   subscription:subscription?{plan_code:subscription.plan_code,status:subscription.status,
    current_period_end:subscription.current_period_end,cancel_at_period_end:!!subscription.cancel_at_period_end,billing_mode:subscription.billing_mode}:null,
-  checkout_enabled:liveEnabled,sandbox_checkout_enabled:env.RAZORPAY_SANDBOX_ENABLED==='true'&&!!env.RAZORPAY_TEST_KEY_ID?.startsWith('rzp_test_')&&!!env.RAZORPAY_TEST_KEY_SECRET&&!!env.RAZORPAY_TEST_STARTER_PLAN_ID&&!!env.RAZORPAY_TEST_PRO_PLAN_ID,
+  checkout_enabled:liveEnabled,live_pilot_plan:liveEnabled?'starter':null,sandbox_checkout_enabled:env.RAZORPAY_SANDBOX_ENABLED==='true'&&!!env.RAZORPAY_TEST_KEY_ID?.startsWith('rzp_test_')&&!!env.RAZORPAY_TEST_KEY_SECRET&&!!env.RAZORPAY_TEST_STARTER_PLAN_ID&&!!env.RAZORPAY_TEST_PRO_PLAN_ID,
   paid_features_enabled:paidEntitlementsEnabled(env)};
 }
