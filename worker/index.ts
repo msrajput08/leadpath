@@ -5,7 +5,7 @@ import { handleApi } from './api.js';
 import { socialStart, socialCallback } from './social.js';
 import { emailRequest, emailVerify } from './email-auth.js';
 import { passwordSignUp, passwordLogin, passwordVerifyEmail, passwordResend, passwordForgot, passwordReset } from './password-auth.js';
-import { confirmCallback, scheduled } from './engine.js';
+import { confirmCallback, scheduled, runQueuedMonitor } from './engine.js';
 import { razorpayWebhook } from './billing.js';
 
 type Ctx = {waitUntil(promise:Promise<unknown>):void};
@@ -63,6 +63,22 @@ export default {
    // Server-side logging intentionally excludes request URLs and tokens.
    console.error('LeadPath request failure',error instanceof Error?error.name:'UnknownError');
    return hardened(json({error:'Unexpected server error. Please try again.'},500));
+  }
+ },
+ async queue(batch:{queue:string;messages:Array<{body:unknown;ack():void;retry():void}>},env:Env,ctx:Ctx):Promise<void>{
+  if(batch.queue!=='leadpath-monitor-jobs'){
+   for(const message of batch.messages)message.retry();
+   console.error('LeadPath received unexpected monitoring queue');
+   return;
+  }
+  for(const message of batch.messages){
+   try{
+    await runQueuedMonitor(env,message.body,ctx);
+    message.ack();
+   }catch(error){
+    console.error('LeadPath queued monitor failed',error instanceof Error?error.name:'UnknownError');
+    message.retry();
+   }
   }
  },
  async scheduled(_event:unknown,env:Env,ctx:Ctx):Promise<void> {
