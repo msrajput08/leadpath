@@ -44,8 +44,11 @@ async function gateway<T>(env:Env,method:'GET'|'POST',path:string,body?:unknown)
  const response=await fetch('https://api.razorpay.com/v1/'+path,{
   method,headers:{Authorization:'Basic '+btoa(env.RAZORPAY_TEST_KEY_ID+':'+env.RAZORPAY_TEST_KEY_SECRET),
    'content-type':'application/json'},body:body===undefined?undefined:JSON.stringify(body),
-   signal:AbortSignal.timeout(9000),redirect:'error'
+   // Cloudflare Workers does not support redirect:'error' (throws TypeError before fetch).
+   // Do not follow redirects: never forward test API credentials to a redirect target.
+   signal:AbortSignal.timeout(9000),redirect:'manual'
  });
+ if(response.status>=300 && response.status<400)throw new RazorpayApiError(response.status);
  if(!response.ok)throw new RazorpayApiError(response.status);
  return await response.json() as T;
 }
