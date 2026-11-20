@@ -133,3 +133,6 @@
 .subscription-tier p{font-size:.83rem}
 .subscription-footnote{margin-top:20px}
 @media(max-width:700px){.subscription-summary,.subscription-comparison{grid-template-columns:1fr}.subscription-soon{font-size:.65rem}}
+
+.monitor-switcher{display:flex;align-items:center;gap:12px;flex-wrap:wrap;margin:18px 0;color:var(--muted);font-size:.85rem;font-weight:700}
+.monitor-switcher select{min-width:180px;max-width:100%;border:1px solid var(--border);border-radius:9px;background:var(--surface-2);color:var(--text);padding:9px 12px;font:inherit}
