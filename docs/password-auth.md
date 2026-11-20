@@ -1,59 +1,48 @@
-# LeadPath email/password + Brevo setup
+# LeadPath email/password sign-in: Supabase Auth + Brevo SMTP
 
-This feature is in an isolated pull request. **Never deploy its Worker before migration 0004 is applied to the production D1 database.** Existing Google and GitHub accounts and sessions remain independent.
+**Critical runtime fix:** Cloudflare Workers Free limits CPU to 10 ms/request and the workerd PBKDF2 implementation rejects more than 100,000 iterations. The original direct D1/password-hashing implementation passed Node tests but cannot run reliably in the free production Worker. Do not deploy commit 466132ba (PR #8) by itself.
 
-## 1. Create a Brevo sender and API key
+This follow-up implementation delegates password hashing, email verification and reset tokens to Supabase Auth (free tier). The existing Cloudflare Worker still manages local D1 workspaces/sessions and all existing Google/GitHub accounts. It never stores the user's plaintext password or password hash in D1.
 
-Create a Brevo account at https://www.brevo.com/. Create/verify a sending address under Senders, Domains & Dedicated IPs. Create an API v3 key from SMTP & API settings. A sender email must be registered/verified and permitted for transactional sending.
+## Setup
 
-Brevo may rewrite free-domain senders (including Gmail) using its compliant sender domain. Deliverability is not guaranteed; domain authentication is strongly recommended before public launch. The free sending quota, account approval and transactional limits may change. This integration uses HTTPS POST to \`https://api.brevo.com/v3/smtp/email\` with the \`api-key\` header, **not** a raw SMTP socket or SMTP key.
+1. Create a **free Supabase project** at https://supabase.com/dashboard. Use a strong database password.
+2. Under **Authentication > Sign In / Providers > Email**, enable Email provider and **Confirm email**. Do not enable auto-confirm.
+3. Under **Authentication > URL Configuration**, set **Site URL** to \`https://leadpath.monty-08-raj.workers.dev\` and allow this address.
+4. In Brevo, create an **SMTP key** (different from the Brevo API v3 key): https://app.brevo.com/settings/keys/smtp. Your already-verified sender address remains the From address. SMTP is subject to your Brevo account's approval, sending limits, sender authentication and potential free-domain sender rewriting.
+5. Under **Supabase > Authentication > Emails > SMTP Settings**, enable custom SMTP:
+   - Sender email: your Brevo verified sender
+   - Sender name: LeadPath
+   - Host: \`smtp-relay.brevo.com\`
+   - Port: \`587\`
+   - Username: your Brevo **SMTP login** (displayed on Brevo's SMTP settings tab)
+   - Password: your **Brevo SMTP key** (not API v3 key)
+6. Under **Supabase > Authentication > Email Templates**, change the link in **Confirm signup** to:
+   \`\`\`html
+   <a href="https://leadpath.monty-08-raj.workers.dev/verify-email?token_hash={{ .TokenHash }}">Verify my email</a>
+   \`\`\`
+   Change the **Reset password** email link to:
+   \`\`\`html
+   <a href="https://leadpath.monty-08-raj.workers.dev/reset-password?token_hash={{ .TokenHash }}">Reset my password</a>
+   \`\`\`
+   Use these in the HTML message bodies; style their surrounding content as desired. Do not include the token hash in outgoing analytics, screenshots or logs. Disable click tracking that rewrites auth links. Templates can be customized with your own SMTP.
+7. Under **Supabase > Project Settings > API Keys**, get the Project URL (\`https://PROJECT_REF.supabase.co\`) and the **publishable/anon key**, *not* the \`service_role\` secret. Set these on Cloudflare:
+   \`\`\`powershell
+   npx wrangler secret put SUPABASE_URL
+   npx wrangler secret put SUPABASE_ANON_KEY
+   \`\`\`
+   Never paste secrets into chat. Note: the previously configured \`BREVO_API_KEY\` is not used by Supabase SMTP; you can remove it from Workers once this integration is working.
+8. Run tests (\`npm test\`, \`npm run build\`), check CI, and deploy only the corrected main branch with \`npm run deploy\`.
 
-## 2. Apply the migration first
+## Behavior / account safety
 
-In your local LeadPath checkout, pull the branch containing this migration:
+- Signup delegates password hashing and confirmation mail to Supabase Auth. No D1 workspace is created before the user's **verified login**.
+- Email verification requires opening a link then pressing **Verify email**; Supabase validates the expiring single-use token hash.
+- Login receives a provider-issued token only server-side, checks the provider-verified email and ID, then issues the existing LeadPath session cookie. OAuth identities remain separate even when email text matches.
+- Forgot password sends the generic confirmation message regardless of account existence.
+- Reset verifies Supabase's one-time recovery link and updates the password at Supabase, then invalidates existing LeadPath D1 sessions for that identity.
+- Supabase Auth controls token lifetimes, password storage and recovery rate limits. LeadPath's Cloudflare edge limiter applies to the corresponding routes.
 
-\`\`\`powershell
-git fetch origin
-git switch feat/premium-password-auth-brevo
-npm ci
-npm run db:remote
-\`\`\`
+Supabase free-tier limits and Brevo SMTP quotas apply. For public scale, enable CAPTCHA/Turnstile to protect signup abuse and verify real inbox placement. See https://developers.brevo.com/docs/supabase-smtp-integration and https://supabase.com/docs/guides/auth/auth-email-templates.
 
-Confirm migration 0004 is applied before merging or deploying the feature. Do not run the migration against a production DB until you have reviewed it and have a backup. The migration adds password_accounts, password_tokens and password_mail_limits; existing tables/rows are not rewritten.
-
-## 3. Configure Cloudflare Worker Secrets
-
-Run these commands one at a time and paste the **values** at Wrangler's prompts:
-
-\`\`\`powershell
-npx wrangler secret put BREVO_API_KEY
-npx wrangler secret put BREVO_SENDER_EMAIL
-npx wrangler secret put BREVO_SENDER_NAME
-\`\`\`
-
-- BREVO_API_KEY = the Brevo **API v3 key** (not an SMTP relay password).
-- BREVO_SENDER_EMAIL = exact sender email registered and verified in Brevo.
-- BREVO_SENDER_NAME = LeadPath (optional).
-
-Secrets are server-side only; do not commit them. If the sending credentials are missing, the public interface will show that password signup is not configured. The old email OTP form is **disabled by default**. To temporarily restore the legacy OTP endpoints, explicitly configure \`ENABLE_EMAIL_OTP=true\` as a Worker secret. This does not link OTP and password identities.
-
-Cloudflare Workers Free and D1 quotas still apply; password hashing uses WebCrypto PBKDF2-HMAC-SHA256 with 600,000 iterations, a new 16-byte salt per password and a 256-bit derived key. Benchmark production CPU behavior before opening public signup.
-
-## 4. Authentication flow
-
-- \`/signup\`: name, email, password, confirmation. Signup creates an **unverified** password account and sends a 24-hour single-use verification link.
-- \`/verify-email?token=...\`: click Verify. No authenticated session is created by clicking an emailed link; the user must sign in.
-- \`/login\`: verified email/password accounts only; secure HttpOnly cookie, SameSite Lax. Repeated incorrect passwords cause a temporary lockout.
-- \`/forgot-password\`: generic success response regardless of whether the account exists.
-- \`/reset-password?token=...\`: single-use 30-minute reset link; all existing sessions for the password-account user are revoked.
-- \`/resend-verification\`: a new verification link, subject to per-address send limits.
-
-Per-address email delivery is limited to no more than one send per 60 seconds and five per 24 hours, in addition to edge IP limits. This protects Brevo free-tier quota but can delay urgent retries. A sender outage leaves unverified registration data in D1; resend can be used later. Authentication cannot be considered live until actual emails arrive and both flows are confirmed end to end.
-
-Password identities and Google/GitHub/legacy-OTP identities intentionally do **not** merge on matching email. A person signing up with email/password alongside an existing Google account gets a separate workspace. User-driven verified account linking is a future feature.
-
-## 5. Tests and launch checklist
-
-Run \`npm test\`, \`npm run build\`, \`npm run test:vitest\`, \`npm run db:local\`, \`npm run test:e2e\` and CI. With the sender verified, test signup, verification, login, resend cooldown, reset, password change, session revocation and existing Google/GitHub sign-in.
-
-Do not merge or publicly enable registration before applying the migration, verifying the sender, completing integration checks and confirming mail delivery to an external recipient. A verified Brevo sender is an operational prerequisite, not a guarantee of inbox placement.
+The D1 migration 0004 created unused \`password_accounts\` and \`password_tokens\` tables for an approach abandoned before production. Leave those tables in place for now; deleting them blindly risks losing data if any testing was done. New passwords live in Supabase Auth, never these tables.

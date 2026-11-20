@@ -19,6 +19,8 @@ export interface Env {
  FACEBOOK_APP_SECRET?: string;
  X_CLIENT_ID?: string;
  X_CLIENT_SECRET?: string;
+ SUPABASE_URL?: string;
+ SUPABASE_ANON_KEY?: string;
  BREVO_API_KEY?: string;
  BREVO_SENDER_EMAIL?: string;
  BREVO_SENDER_NAME?: string;

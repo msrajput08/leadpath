@@ -48,7 +48,7 @@ test('password reset form checks matching passwords without sending malformed re
   status:200,contentType:'application/json',
   body:JSON.stringify({google_auth_configured:false,github_auth_configured:false,password_auth_configured:true})
  }));
- await page.goto('/reset-password?token='+('a'.repeat(64)));
+ await page.goto('/reset-password?token_hash='+('a'.repeat(64)));
  await page.getByLabel('New password').fill('new-secure-password-123');
  await page.getByLabel('Confirm password').fill('different-secure-password-123');
  await page.getByRole('button',{name:/Update password/i}).click();
