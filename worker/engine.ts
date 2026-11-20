@@ -132,6 +132,10 @@ export async function confirmCallback(req: Request, env: Env, monitorId: string,
 
 export async function runQueuedMonitor(env:Env,payload:unknown,ctx:SideEffect):Promise<void>{
  if(!payload||typeof payload!=='object')return;
+ if((payload as {kind?:unknown}).kind==='sweep'){
+  await sweepTimedOut(env,ctx,4);
+  return;
+ }
  const monitorId=(payload as {monitor_id?:unknown}).monitor_id;
  if(typeof monitorId!=='string'||!/^[0-9a-f-]{36}$/.test(monitorId))return;
  const monitor=await env.DB.prepare('SELECT * FROM monitors WHERE id=? AND state=\'active\'')
@@ -141,13 +145,13 @@ export async function runQueuedMonitor(env:Env,payload:unknown,ctx:SideEffect):P
  // messages can be delivered more than once or after a downgrade.
  await runMonitor(env,monitor,'scheduled',ctx);
 }
-export async function sweepTimedOut(env: Env, ctx: SideEffect): Promise<void> {
- const expired=await env.DB.prepare("SELECT id,monitor_id FROM runs WHERE state='pending' AND expires_at<? ORDER BY expires_at LIMIT 32").bind(now()).all<{id:string;monitor_id:string}>();
+export async function sweepTimedOut(env: Env, ctx: SideEffect,limit=32): Promise<void> {
+ const expired=await env.DB.prepare("SELECT id,monitor_id FROM runs WHERE state='pending' AND expires_at<? ORDER BY expires_at LIMIT ?").bind(now(),limit).all<{id:string;monitor_id:string}>();
  for (const run of expired.results) await failRun(env,run.id,run.monitor_id,'unconfirmed','ACK_TIMEOUT',ctx);
 }
 export async function scheduled(env: Env, ctx: SideEffect): Promise<void> {
  // Default three to preserve free-tier costs; up to 40 only after a separate paid capacity review.
- await sweepTimedOut(env,ctx);
+ if(!env.MONITOR_QUEUE)await sweepTimedOut(env,ctx);
  const batchLimit=Math.max(1,Math.min(40,Number(env.SCHEDULE_BATCH_LIMIT)||3));
  // Exclude over-quota monitors from the SQL batch BEFORE limiting, even after enabling
  // paid plans. Otherwise dormant downgraded monitors may starve paying and Free users.
@@ -171,8 +175,10 @@ export async function scheduled(env: Env, ctx: SideEffect): Promise<void> {
   // Sending IDs, not encrypted URLs or callback secrets. D1's atomic due claim
   // makes retry/duplicate deliveries harmless. A single failed enqueue must
   // fail the Cron event so it is observable, without advancing next_due.
-  if(due.results.length)await env.MONITOR_QUEUE.sendBatch(
-   due.results.map(m=>({body:{monitor_id:m.id,enqueued_at:scheduleNow}})));
+  await env.MONITOR_QUEUE.sendBatch([
+   ...due.results.map(m=>({body:{monitor_id:m.id,enqueued_at:scheduleNow}})),
+   {body:{kind:'sweep' as const,enqueued_at:scheduleNow}}
+  ]);
  }else for(const monitor of due.results)await runMonitor(env,monitor,'scheduled',ctx);
  // Daily cleanup only. Repeating historical DELETE queries every 15 min is costly in D1.
  const time=now(); const utc=new Date(time);
