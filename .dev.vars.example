@@ -26,3 +26,7 @@ BREVO_SENDER_EMAIL=
 BREVO_SENDER_NAME=LeadPath
 # Legacy one-time-code login is off by default.
 ENABLE_EMAIL_OTP=false
+
+# Supabase Auth for secure email/password (free Workers cannot perform password KDF locally).
+SUPABASE_URL=https://YOUR_PROJECT.supabase.co
+SUPABASE_ANON_KEY=

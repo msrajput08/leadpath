@@ -1,6 +1,6 @@
 # LeadPath authentication — Cloudflare Workers
 
-**New:** Premium email/password signup, login, email verification, and password reset via Brevo HTTPS API are documented in [password-auth.md](password-auth.md). Apply migration 0004 before deploying. Legacy email OTP is disabled by default; set ENABLE_EMAIL_OTP=true to explicitly enable it.
+**New:** Premium email/password signup, login, verification and reset via **Supabase Auth + Brevo SMTP** are documented in [password-auth.md](password-auth.md). Supabase handles password hashing and email tokens; the Cloudflare Worker only creates local application sessions. Legacy email OTP is disabled by default; set ENABLE_EMAIL_OTP=true to explicitly enable it.
 
 LeadPath supports Google, Facebook, X, GitHub, and passwordless email sign-in. Buttons appear only when their required server configuration exists. Existing GitHub users can keep signing in normally.
 
