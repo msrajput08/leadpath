@@ -101,3 +101,18 @@
 .legal-content p:not(.lead){line-height:1.8;max-width:780px}
 .legal-content a{color:var(--green);text-decoration:underline}
 @media(max-width:700px){.price-grid-live{grid-template-columns:1fr}.support-contact{padding:22px}.support-email{align-items:flex-start}}
+
+/* Useful, crawlable links to specific troubleshooting articles. */
+.seo-guide-links{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:12px;margin:26px 0}
+.seo-guide-link{display:flex;gap:13px;align-items:center;padding:19px;border:1px solid var(--border);border-radius:12px;background:var(--surface);color:var(--text);min-width:0}
+.seo-guide-link:hover{border-color:var(--green-deep)}
+.seo-guide-link>svg:first-child{color:var(--green);flex-shrink:0}
+.seo-guide-link>svg:last-child{flex-shrink:0;color:var(--muted)}
+.seo-guide-link>span{display:flex;flex-direction:column;gap:5px;flex:1;min-width:0}
+.seo-guide-link strong{font-size:.91rem}
+.seo-guide-link small{font-size:.77rem;color:var(--muted);line-height:1.5}
+.guide-related{margin:40px 0 32px;padding:24px;border:1px solid var(--border);border-radius:14px;background:var(--surface)}
+.guide-related h2{margin:0 0 16px}
+.guide-related ul{list-style:none;margin:0;padding:0;display:grid;gap:12px}
+.guide-detail>p{line-height:1.85;max-width:750px}
+@media(max-width:700px){.seo-guide-links{grid-template-columns:1fr}}
