@@ -79,7 +79,7 @@ export default function BillingPanel({compact=false,csrfToken}:{compact?:boolean
   return()=>{active=false;};
  },[csrfToken,details?.subscription?.billing_mode,details?.subscription?.status]);
  return <section className="panel dashboard-box subscription-panel" aria-labelledby="subscription-heading">
-  <div className="box-header"><div><span className="eyebrow">SUBSCRIPTIONS</span><h2 id="subscription-heading">Plan & usage</h2></div><span className="subscription-soon">{details?.checkout_enabled?'INR subscriptions available':'Paid plans coming soon'}</span></div>
+  <div className="box-header"><div><span className="eyebrow">SUBSCRIPTIONS</span><h2 id="subscription-heading">Plan & usage</h2></div><span className="subscription-soon">{details?.subscription?.billing_mode==='live'?'Live subscription':details?.checkout_enabled?'Starter pilot enrollment open':'Paid enrollment closed'}</span></div>
   {message&&<p className="small muted" role="status">{message}</p>}
   {details&&<>
    <div className="subscription-summary">
@@ -127,7 +127,7 @@ export default function BillingPanel({compact=false,csrfToken}:{compact?:boolean
     {sandboxUrl&&<a className="btn btn-secondary" href={sandboxUrl} target="_blank" rel="noopener noreferrer">Open hosted test checkout</a>}
    </div>}
    <p className="small muted subscription-footnote"><ShieldCheck size={15}/>
-    {details.checkout_enabled||details.subscription?.billing_mode==='live'?'Live Razorpay subscriptions are real recurring payments. New enrollments may be paused; cancellation and billing status remain available.':'No payment is being collected. Paid tiers are proposals, not purchase offers.'}
+    {details.checkout_enabled||details.subscription?.billing_mode==='live'?'Live Razorpay subscriptions are real recurring payments. New enrollments may be paused; cancellation and billing status remain available.':'No new subscription checkout is available. Existing live subscriptions can still be managed here.'}
     {' '}External Make and Google limits still apply; monitoring schedules are best-effort.</p>
    {compact&&<a className="btn btn-secondary" href="/account">View subscription details</a>}
   </>}
