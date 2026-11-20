@@ -29,6 +29,14 @@ export default function App({initialPath}:{initialPath?:string}={}) {
  const route=initialPath??(typeof window!=='undefined'?window.location.pathname:'/');
  const [dark,setDark]=useState(true);
  const [open,setOpen]=useState(false);
+ const [loggedIn,setLoggedIn]=useState(false);
+ useEffect(()=>{
+  let active=true;
+  fetch('/api/me',{credentials:'same-origin'})
+   .then(res=>{if(active)setLoggedIn(res.ok);})
+   .catch(()=>{if(active)setLoggedIn(false);});
+  return()=>{active=false;};
+ },[]);
  useSeo(route);
  useEffect(()=>{if(localStorage.getItem('leadpath_theme')==='light')setDark(false);},[]);
  useEffect(()=>{document.documentElement.dataset.theme=dark?'dark':'light';localStorage.setItem('leadpath_theme',dark?'dark':'light');},[dark]);
@@ -37,7 +45,8 @@ export default function App({initialPath}:{initialPath?:string}={}) {
   <header className="site-header"><div className="header-inner container">
    <a href="/" className="brand" aria-label="LeadPath home"><span className="brand-icon"><Activity size={19} strokeWidth={2.5}/></span><span>leadpath<span className="brand-period">.</span></span></a>
    <nav className={'top-nav '+(open?'visible':'')} aria-label="Main navigation">{items.map(([label,url])=><a key={url} href={url} className={route===url?'nav-current':''}>{label}</a>)}<a href="/checker">Free checker</a></nav>
-   <div className="nav-actions"><button className="icon-button theme-toggle" onClick={()=>setDark(!dark)} aria-label={dark?'Switch to light mode':'Switch to dark mode'}>{dark?<Sun size={18}/>:<Moon size={18}/>}</button><a className="nav-login" href="/login">Log in</a><a className="btn btn-primary nav-cta" href="/signup">Get started <ArrowUpRight size={16}/></a><button className="icon-button mobile-menu" onClick={()=>setOpen(!open)} aria-expanded={open} aria-label="Toggle navigation"><Menu size={22}/></button></div>
+   <div className="nav-actions"><button className="icon-button theme-toggle" onClick={()=>setDark(!dark)} aria-label={dark?'Switch to light mode':'Switch to dark mode'}>{dark?<Sun size={18}/>:<Moon size={18}/>}</button>{loggedIn?<><a className="nav-login" href="/account">Account</a><a className="btn btn-primary nav-cta" href="/dashboard">Dashboard <ArrowUpRight size={16}/></a></>
+     :<><a className="nav-login" href="/login">Log in</a><a className="btn btn-primary nav-cta" href="/signup">Get started <ArrowUpRight size={16}/></a></>}<button className="icon-button mobile-menu" onClick={()=>setOpen(!open)} aria-expanded={open} aria-label="Toggle navigation"><Menu size={22}/></button></div>
   </div></header>
   <main>{isApp?<Dashboard page={route}/>:route==='/checker'?<Checker/>:<MarketingPage path={route}/>}</main>
   <footer className="site-footer"><div className="container footer-grid"><div><a href="/" className="brand"><span className="brand-icon"><Webhook size={17}/></span>leadpath<span className="brand-period">.</span></a><p>Know when a lead workflow stops confirming delivery.</p><span className="small muted">Authorized workflows · Synthetic monitoring · No real lead data</span></div><div><strong>Product</strong><a href="/features">Features</a><a href="/pricing">Pricing</a><a href="/checker">Free checker</a></div><div><strong>Resources</strong><a href="/docs">Documentation</a><a href="/how-it-works">How it works</a><a href="/faq">FAQ</a></div><div><strong>Company</strong><a href="/contact">Contact</a><a href="/privacy">Privacy</a><a href="/terms">Terms</a></div></div><div className="container footer-bottom"><span>© {new Date().getFullYear()} LeadPath · <a href="mailto:minty.12.shar@gmail.com">Support</a></span><span>Works with Make + Google Sheets <ChevronRight size={13}/></span></div></footer>
