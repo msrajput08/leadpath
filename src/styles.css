@@ -136,3 +136,13 @@
 
 .monitor-switcher{display:flex;align-items:center;gap:12px;flex-wrap:wrap;margin:18px 0;color:var(--muted);font-size:.85rem;font-weight:700}
 .monitor-switcher select{min-width:180px;max-width:100%;border:1px solid var(--border);border-radius:9px;background:var(--surface-2);color:var(--text);padding:9px 12px;font:inherit}
+
+/* Public tier cards: distinctive, responsive, and honest about closed purchase states. */
+.pricing-page .price-grid{align-items:stretch}
+.pricing-page .pricing-card{min-width:0}
+.pricing-page .pricing-pilot{border-color:color-mix(in srgb,var(--green) 38%,var(--border));background:linear-gradient(155deg,var(--surface),var(--surface-2))}
+.pricing-page .price{font-size:clamp(2rem,3vw,2.7rem)}
+.pricing-page .price span{display:inline-block}
+.plan-unavailable{margin-top:auto;display:flex;align-items:center;justify-content:center;min-height:46px;padding:12px 14px;border:1px solid var(--border);border-radius:11px;background:var(--surface-2);font-size:.84rem;font-weight:700;color:var(--muted);text-align:center}
+@media(max-width:940px){.pricing-page .price-grid{grid-template-columns:repeat(2,minmax(0,1fr))}}
+@media(max-width:650px){.pricing-page .price-grid{grid-template-columns:1fr}.pricing-page .pricing-card{padding:24px}}
