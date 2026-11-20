@@ -101,13 +101,16 @@ test('public Contact, Privacy and Terms pages have useful live content instead o
  await expect(page.getByRole('heading',{name:/Availability and limits/i})).toBeVisible();
  await expect(page.getByText(/provisional template/i)).toHaveCount(0);
 });
-test('pricing only shows the actually available free product, and no invented upgrade tiers',async({page})=>{
+test('pricing transparently shows Free, closed pilot and proposed Pro without fake checkout',async({page})=>{
  await page.goto('/pricing');
- await expect(page.getByRole('heading',{name:/LeadPath is free to use/i})).toBeVisible();
- await expect(page.getByText(/CURRENT PLAN · FREE/i)).toBeVisible();
- await expect(page.getByRole('link',{name:/Create free account/i})).toHaveAttribute('href','/signup');
- await expect(page.getByText(/No paid LeadPath upgrade or checkout is offered/i)).toBeVisible();
- await expect(page.getByText(/\$19|\$49|COMING SOON|PLANNED/i)).toHaveCount(0);
+ await expect(page.getByRole('heading',{name:/Start free. Monitor with confidence/i})).toBeVisible();
+ await expect(page.getByText('FREE · AVAILABLE')).toBeVisible();
+ await expect(page.getByRole('link',{name:/Start free/i})).toHaveAttribute('href','/signup');
+ await expect(page.getByText('₹799')).toBeVisible();
+ await expect(page.getByText('₹2,499')).toBeVisible();
+ await expect(page.getByText('Pro subscriptions are not open')).toBeVisible();
+ await expect(page.getByText(/Pilot enrollment is currently closed/i)).toBeVisible();
+ await expect(page.getByRole('link',{name:/Open Starter in account/i})).toHaveCount(0);
 });
 test('public pages have canonical URLs while auth and private routes explicitly opt out of indexing',async({page})=>{
  await page.goto('/contact');
