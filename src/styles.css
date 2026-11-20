@@ -116,3 +116,20 @@
 .guide-related ul{list-style:none;margin:0;padding:0;display:grid;gap:12px}
 .guide-detail>p{line-height:1.85;max-width:750px}
 @media(max-width:700px){.seo-guide-links{grid-template-columns:1fr}}
+
+/* Subscription foundation: read-only billing status and proposed future tiers */
+.subscription-panel{margin-top:25px}
+.subscription-soon{display:inline-flex;align-items:center;border:1px solid var(--border);border-radius:999px;padding:5px 11px;font-size:.72rem;font-weight:700;color:var(--muted);letter-spacing:.02em}
+.subscription-summary{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:14px;margin:20px 0}
+.subscription-summary>div{display:flex;flex-direction:column;gap:5px;background:var(--surface-2);border:1px solid var(--border);padding:17px;border-radius:12px}
+.subscription-summary strong{font:800 1.45rem Manrope,sans-serif;color:var(--text)}
+.subscription-summary small{font-size:.77rem;color:var(--muted)}
+.subscription-comparison{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:14px}
+.subscription-tier{min-width:0;border:1px solid var(--border);border-radius:13px;padding:20px;background:var(--surface-2)}
+.subscription-tier h3{margin:12px 0}
+.subscription-tier .subscription-price{font:800 1.5rem Manrope,sans-serif}
+.subscription-price small{font:500 .8rem 'DM Sans',sans-serif;color:var(--muted)}
+.subscription-tier>span:last-child,.subscription-footnote{display:flex;align-items:center;gap:7px;flex-wrap:wrap}
+.subscription-tier p{font-size:.83rem}
+.subscription-footnote{margin-top:20px}
+@media(max-width:700px){.subscription-summary,.subscription-comparison{grid-template-columns:1fr}.subscription-soon{font-size:.65rem}}
