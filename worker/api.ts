@@ -6,7 +6,7 @@ import { emailLoginConfigured } from './email-auth.js';
 import { passwordAuthConfigured } from './password-auth.js';
 import { getEntitlements, billingOverview } from './entitlements.js';
 import { sandboxCreateSubscription,sandboxCancelSubscription,sandboxVerifyCheckout } from './razorpay-test.js';
-import {createLiveSubscription,cancelLiveSubscription,confirmLiveCheckout,syncLiveSubscription} from './razorpay-live.js';
+import {createLiveSubscription,cancelLiveSubscription,confirmLiveCheckout,syncLiveSubscription,liveCheckoutReady} from './razorpay-live.js';
 
 type Context = { waitUntil(promise: Promise<unknown>): void };
 const isId=(value:string)=>/^[0-9a-f-]{36}$/.test(value);
@@ -42,6 +42,19 @@ export async function handleApi(req:Request,env:Env,ctx:Context):Promise<Respons
     }
   }
   return json({online:true,google_auth_configured:!!(env.GOOGLE_CLIENT_ID&&env.GOOGLE_CLIENT_SECRET),github_auth_configured:!!(env.GITHUB_CLIENT_ID&&env.GITHUB_CLIENT_SECRET),facebook_auth_configured:!!(env.FACEBOOK_APP_ID&&env.FACEBOOK_APP_SECRET),x_auth_configured:!!(env.X_CLIENT_ID&&env.X_CLIENT_SECRET),email_auth_configured:emailLoginConfigured(env),password_auth_configured:passwordAuthConfigured(env),db_binding_configured,db_schema_ready,version:'0.1.0'});
+ }
+ if(pathname==='/api/public/billing' && req.method==='GET'){
+  // Public, low-detail commerce availability; never expose API keys, customer data or slots.
+  let pilotAvailable=false;
+  if(liveCheckoutReady(env)&&env.DB){
+   try {
+    const slots=await env.DB.prepare('SELECT COUNT(*) AS total FROM live_billing_slots').first<{total:number}>();
+    pilotAvailable=(slots?.total??Infinity)<1;
+   } catch { /* Do not advertise paid checkout if D1 is unavailable. */ }
+  }
+  return json({pilot_plan:'starter',starter_pilot_available:pilotAvailable,
+   pro_available:false,currency:'INR',region:'India',billing_period:'monthly'},200,
+   {'Cache-Control':'no-store, private'});
  }
  const session=await getSession(req,env);
  if (!session) return fail(401,'Sign in to access your dashboard.');
