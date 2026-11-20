@@ -125,9 +125,9 @@ test('verified LIVE payment activates only the matching live record, and owner c
    'account deletion cannot silently leave a Razorpay mandate charging the user');
   const bill=await send(env,who,'/api/billing');
   const overview=await bill.json();
-  assert.equal(overview.checkout_enabled,true);
+  assert.equal(overview.checkout_enabled,false,'single-account pilot checkout must close after slot reservation');
   assert.equal(overview.live_pilot_plan,'starter');
-  assert.equal(overview.plans.find(p=>p.code==='starter').available_for_purchase,true);
+  assert.equal(overview.plans.find(p=>p.code==='starter').available_for_purchase,false,'Starter CTA closes when slot is occupied');
   assert.equal(overview.plans.find(p=>p.code==='pro').available_for_purchase,false);
   const cancel=await send(env,who,'/api/billing/live/cancel','POST',{});
   assert.equal(cancel.status,200);
