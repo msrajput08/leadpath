@@ -26,7 +26,7 @@ export default function AuthOptions({initialMode='login'}:{initialMode?:Mode}){
  const [busy,setBusy]=useState(false);
  const [error,setError]=useState('');
  const [action,setAction]=useState<Action>('signup');
- const [token]=useState(()=>new URLSearchParams(window.location.search).get('token')||'');
+ const [token]=useState(()=>new URLSearchParams(window.location.search).get('token_hash')||'');
  useEffect(()=>{
   fetch('/api/public/status',{credentials:'same-origin'})
    .then(async r=>{if(!r.ok)throw Error('Unavailable');setStatus(await r.json());})
