@@ -48,6 +48,7 @@ export interface Env {
  RAZORPAY_LIVE_WEBHOOK_SECRET?: string;
  LIVE_CAPACITY_REVIEWED?: string;
  LIVE_MAX_PAID_ACCOUNTS?: string;
+ LIVE_PILOT_PLAN?: string;
  ALLOW_TEST_BILLING_ENTITLEMENTS?: string;
  RATE_LIMITER?: {limit(input:{key:string}):Promise<{success:boolean}>};
 }
