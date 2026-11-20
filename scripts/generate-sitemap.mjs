@@ -6,5 +6,5 @@ const routes=['/','/how-it-works','/features','/pricing','/checker','/docs','/fa
  '/docs/webflow-make','/docs/make-sheets','/docs/crm-missing','/docs/webhook-200','/docs/silent-failures','/docs/free-monitoring'];
 const xml='<?xml version="1.0" encoding="UTF-8"?>\n<urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">\n'+routes.map(route=>`  <url><loc>${base}${route}</loc></url>`).join('\n')+'\n</urlset>\n';
 fs.writeFileSync('public/sitemap.xml',xml);
-fs.writeFileSync('public/robots.txt',`User-agent: *\nAllow: /\nDisallow: /dashboard\nDisallow: /account\nDisallow: /login\nDisallow: /signup\nDisallow: /forgot-password\nDisallow: /resend-verification\nDisallow: /verify-email\nDisallow: /reset-password\nDisallow: /api/\nDisallow: /auth/\nSitemap: ${base}/sitemap.xml\n`);
+fs.writeFileSync('public/robots.txt',`User-agent: *\nAllow: /\nDisallow: /api/\nDisallow: /auth/\nSitemap: ${base}/sitemap.xml\n`);
 console.log(`Generated sitemap and robots.txt for ${base}`);
