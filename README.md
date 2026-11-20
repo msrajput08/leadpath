@@ -4,14 +4,14 @@
 
 **Current deployment:** https://leadpath.monty-08-raj.workers.dev/ (operator-reported live Cloudflare Worker). GitHub CI runs type checks, API/database tests, dependency audit, build and Playwright local browser smoke tests. The operator reports successful real Make/Sheets callback, cron, alert and recovery tests; independent live-site verification and unrestricted public-launch approval are **not claimed**. See `PRODUCTION_READINESS.md` and `VERIFICATION.md`.
 
-**Support:** [minty.12.shar@gmail.com](mailto:minty.12.shar@gmail.com). The public UI offers one free monitor; no paid plans or checkout are available.
+**Support:** [minty.12.shar@gmail.com](mailto:minty.12.shar@gmail.com). The public UI offers a generally available Free monitor. The Starter ₹799/month Live checkout code is present but intentionally gated to a single India-only pilot; Pro is not available for purchase. Until the final billing/capacity controls are enabled, no new real-money checkout is offered.
 
 ## What's built
 
-- React + Vite + TypeScript pre-rendered, search-friendly marketing website, free local JSON/URL diagnostic checker, responsive dashboard, light/dark theme, guides, Contact page, factual Privacy Policy and Terms disclosures (subject to operator legal review).
-- Cloudflare Worker API (dependency-free native handler) and D1 migrations. Worker includes scheduled Cron monitoring, HTTPS Make webhook URL allowlist, encrypted webhook URLs at rest, 256-bit hashed callback credentials, 30-minute confirmation window, replay prevention, concurrency protection, failure/recovery tracking, in-app alerts and optional Telegram delivery.
+- React + Vite + TypeScript pre-rendered, search-friendly marketing website, three-tier transparent pricing with server-verified Starter pilot availability, free local JSON/URL diagnostic checker, responsive dashboard, authenticated navigation, light/dark theme, guides, Contact page, factual Privacy Policy and Terms disclosures (subject to operator legal review).
+- Cloudflare Worker API (dependency-free native handler), D1 migrations and optional Free Cloudflare Queue dispatch for scheduled checks. Worker includes Cron monitoring, HTTPS Make webhook URL allowlist, encrypted webhook URLs at rest, 256-bit hashed callback credentials, 30-minute confirmation window, replay prevention, concurrency protection, failure/recovery tracking, in-app alerts and optional Telegram delivery.
 - Google OAuth (signed ID-token verification, PKCE, nonce/state checks) and optional GitHub OAuth (authorization code + PKCE, verified email). Secure HttpOnly sessions and CSRF token.
-- One active/paused monitor maximum per user, six-hour scheduled cadence, **max three manual tests per rolling 24 hours**, minimum 15-minute manual cooldown.
+- Free tier: one active/paused monitor, target six-hour scheduled cadence, **max three manual tests per rolling 24 hours**, and minimum 15-minute manual cooldown. A gated single-account India-only Starter pilot supports up to five monitors and target hourly checks; Pro is a proposed tier, not an active offer.
 - CSV-free local database integration tests using Node's built-in SQLite and native fetch mocks. Real credentials and payments are **not** committed.
 
 ## Structure
