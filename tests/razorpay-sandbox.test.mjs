@@ -105,6 +105,8 @@ test('sandbox rejects mismatched Razorpay plan amount and never creates a subscr
   const result=await send('/api/billing/sandbox/create','POST',{plan_code:'starter'});
   assert.equal(result.status,503);
   assert.equal((await DB.prepare('SELECT COUNT(*) n FROM user_subscriptions').first()).n,0);
+  assert.equal((await DB.prepare('SELECT COUNT(*) n FROM billing_creation_locks').first()).n,0,
+   'invalid plans must not hold a 30-minute checkout lock');
   assert.equal(visited.length,1,'price mismatch fails before payment initiation');
  } finally{globalThis.fetch=originalFetch;DB.sql.close();}
 });
