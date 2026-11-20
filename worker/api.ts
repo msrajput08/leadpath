@@ -5,6 +5,7 @@ import { runMonitor } from './engine.js';
 import { emailLoginConfigured } from './email-auth.js';
 import { passwordAuthConfigured } from './password-auth.js';
 import { getEntitlements, billingOverview } from './entitlements.js';
+import { sandboxCreateSubscription,sandboxCancelSubscription,sandboxVerifyCheckout } from './razorpay-test.js';
 
 type Context = { waitUntil(promise: Promise<unknown>): void };
 const isId=(value:string)=>/^[0-9a-f-]{36}$/.test(value);
@@ -48,6 +49,9 @@ export async function handleApi(req:Request,env:Env,ctx:Context):Promise<Respons
  const userId=session.user_id;
  if (pathname==='/api/me' && req.method==='GET') return json({ id:userId,email:session.email,name:session.name,avatar_url:session.avatar_url,csrf_token:session.csrf_token });
  if (pathname==='/api/billing' && req.method==='GET') return json(await billingOverview(env,userId));
+ if (pathname==='/api/billing/sandbox/create' && req.method==='POST') return sandboxCreateSubscription(env,userId,req);
+ if (pathname==='/api/billing/sandbox/cancel' && req.method==='POST') return sandboxCancelSubscription(env,userId);
+ if (pathname==='/api/billing/sandbox/verify' && req.method==='POST') return sandboxVerifyCheckout(env,userId,req);
  if (pathname==='/api/monitors' && req.method==='GET') {
   const result=await env.DB.prepare('SELECT * FROM monitors WHERE user_id=? ORDER BY created_at DESC').bind(userId).all<Record<string,unknown>>();
   const plan=await getEntitlements(env,userId);
