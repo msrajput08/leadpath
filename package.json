@@ -15,7 +15,8 @@
     "test:vitest": "vitest run tests/validators.test.ts",
     "test:e2e": "playwright test",
     "staging:setup": "node scripts/staging-setup.mjs",
-    "live:preflight": "node scripts/live-preflight.mjs"
+    "live:preflight": "node scripts/live-preflight.mjs",
+    "live:readiness": "node scripts/live-readiness.mjs"
   },
   "dependencies": {
     "react": "^19.2.0",
