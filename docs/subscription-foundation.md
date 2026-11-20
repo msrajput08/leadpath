@@ -102,6 +102,19 @@ Additional pre-launch checks: document tax/GST treatment on INR prices and invoi
 
 Authoritative references: [Razorpay integration and required checkout proof](https://razorpay.com/docs/payments/subscriptions/integration-guide/), [Razorpay subscription API](https://razorpay.com/docs/api/payments/subscriptions/create-subscription/), [Razorpay signed webhook validation](https://razorpay.com/docs/webhooks/validate-test/), [Cloudflare Workers limits](https://developers.cloudflare.com/workers/platform/limits/).
 
+### Free-plan Queue dispatch for the one-account Starter pilot (implemented, not deployed by code changes)
+
+Cloudflare Queues became available on Workers Free in February 2026 with **10,000 operations/day** included. This branch now optionally enqueues eligible due monitor IDs rather than running every Make webhook inside the 15-minute Cron handler. The same Worker acts as a Queue consumer with a **single message per invocation**; an atomic D1 due claim prevents duplicates and stale queued requests from dispatching extra Make test records. A separate bounded sweep message handles up to four expired runs. Queue payloads contain only monitor IDs and enqueue timestamps, not encrypted webhook URLs, callback credentials or customer data. Production without `MONITOR_QUEUE` retains the existing Cron behavior.
+
+**Configure only after CI passes**:
+1. `npm run live:preflight` if the ignored `wrangler.live.local.jsonc` does not exist; a repeated preflight preserves validated Queue bindings.
+2. `npm run live:queue:setup` — verifies exactly `leadpath`/`leadpath-db`, creates the named `leadpath-monitor-jobs` Queue if absent (no charge under included Free operations), and writes the producer plus consumer binding **only to the ignored generated live config**, not `wrangler.jsonc`. It never deploys and never enables billing.
+3. `npm run build && npx wrangler deploy --config wrangler.live.local.jsonc`. Confirm Cloudflare Queue consumer deliveries and scheduled monitoring, including normal `/api/callback/` acknowledgements. Cron runs every 15 minutes and enqueues one sweep job plus up to the configured monitor limit. If Queue configuration or delivery is unhealthy, DO NOT activate paid sales.
+4. Keep the explicit `LIVE_BILLING_ENABLED` and `LIVE_CAPACITY_REVIEWED` gates **off** until real Cloudflare Queue/Make delivery and CPU usage are verified. Queues reduce pressure from a heavy Cron batch but Queue consumers on the Free tier still have the platform CPU limit; tests running on Node/SQLite are not evidence of Cloudflare performance.
+5. Existing checkout and billing secrets remain completely separate. Pro stays blocked for purchase. The free queue is an option to reduce deployment costs, not a promise of unrestricted scaling.
+
+Queue operations for a single Starter user with five hourly monitors are roughly **120 monitor messages/day** (write, read, delete operations) plus a sweep job every 15 minutes, subject to retries and other queue activity. This is below the published Free included operations in isolation but must be monitored. References: [Queues Free release](https://developers.cloudflare.com/changelog/post/2026-02-04-queues-free-plan/), [Queues pricing](https://developers.cloudflare.com/queues/platform/pricing/), [Queues limits](https://developers.cloudflare.com/queues/platform/limits/).
+
 ## Razorpay TEST-mode checkout foundation (separate from paid launch)
 
 A sandbox-only checkout flow now lives behind **RAZORPAY_SANDBOX_ENABLED=true** plus `RAZORPAY_TEST_KEY_ID`, `RAZORPAY_TEST_KEY_SECRET`, `RAZORPAY_TEST_STARTER_PLAN_ID` and `RAZORPAY_TEST_PRO_PLAN_ID`. The server rejects keys that do not start with `rzp_test_`. **No live Razorpay key is used by these endpoints**, and these flags are off by default.
