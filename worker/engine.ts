@@ -1,6 +1,7 @@
 import type { Env, Monitor, Run } from './types.js';
 import { json, now, readBoundedJson, InputError } from './util.js';
 import { CONFIRMATION_WINDOW_MS, decryptSecret, syntheticPayload, sha256, constantTimeEqual, validateMakeWebhook, webhookOwnershipProof } from './security.mjs';
+import {getEntitlements,withinMonitorLimit,recordUsage,paidEntitlementsEnabled} from './entitlements.js';
 
 type SideEffect = { waitUntil(promise: Promise<unknown>): void };
 export const HOUR6 = 6*60*60*1000;
@@ -36,19 +37,25 @@ async function failRun(env: Env, runId: string, monitorId: string, state: 'uncon
 export async function runMonitor(env: Env, monitor: Monitor, source: 'manual'|'scheduled', ctx: SideEffect): Promise<{accepted:boolean;run_id?:string;message?:string}> {
  const time=now(); const runId=crypto.randomUUID();
  if (source==='scheduled' && !monitor.verified_at) return {accepted:false,message:'Verify Make webhook ownership before automatic monitoring.'};
+ const plan=await getEntitlements(env,monitor.user_id);
+ if (!(await withinMonitorLimit(env,monitor,plan.monitor_limit))) return {accepted:false,message:'This monitor is outside the current plan allowance.'};
  if (source==='manual') {
   const recent=await env.DB.prepare("SELECT COUNT(*) AS total FROM runs WHERE monitor_id=? AND source='manual' AND created_at>=?").bind(monitor.id,time-86400000).first<{total:number}>();
-  if ((recent?.total||0)>=3) return {accepted:false,message:'Free plan allows up to 3 manual runs in a rolling 24 hours.'};
+  if ((recent?.total||0)>=plan.manual_runs_per_day) return {accepted:false,message:'Your plan manual-run limit was reached for the last 24 hours.'};
  }
  // Atomic claim: last_checked + next_due prevent overlapping executions across cron / manual callers.
  const guard=source==='scheduled' ? 'next_due<=?' : '(last_checked IS NULL OR last_checked<=?)';
  const threshold=source==='scheduled'?time:time-MANUAL_COOLDOWN;
  const result=await env.DB.prepare(`UPDATE monitors SET next_due=?,lock_until=?,last_checked=?,last_run_id=?,health='pending',updated_at=? WHERE id=? AND state='active' AND ${guard} AND (lock_until IS NULL OR lock_until<?)`)
-  .bind(time+HOUR6,time+60000,time,runId,time,monitor.id,threshold,time).run();
+  .bind(time+plan.interval_seconds*1000,time+60000,time,runId,time,monitor.id,threshold,time).run();
  if (!result.meta.changes) return {accepted:false,message:'Monitor paused, locked or in manual-test cooldown (15 minutes).'};
  try {
   await env.DB.prepare("INSERT INTO runs (id,monitor_id,state,source,created_at,expires_at) VALUES(?,?,'pending',?,?,?)")
    .bind(runId,monitor.id,source,time,time+CONFIRMATION_WINDOW_MS).run();
+  // Accounting is best-effort; dispatch safety does not depend on a counter update.
+  await recordUsage(env,monitor.user_id,source,time).catch(()=>console.error('LeadPath usage counter update failed'));
+  await env.DB.prepare('UPDATE monitors SET schedule_interval_seconds=? WHERE id=? AND last_run_id=?')
+   .bind(plan.interval_seconds,monitor.id,runId).run();
  } catch {
   await env.DB.prepare("UPDATE monitors SET health='degraded',lock_until=NULL,next_due=? WHERE id=? AND last_run_id=?")
    .bind(time+MANUAL_COOLDOWN,monitor.id,runId).run();
@@ -132,8 +139,13 @@ export async function sweepTimedOut(env: Env, ctx: SideEffect): Promise<void> {
 export async function scheduled(env: Env, ctx: SideEffect): Promise<void> {
  // Compact batches to keep daily free-tier D1 queries and cron CPU bounded.
  await sweepTimedOut(env,ctx);
- const due=await env.DB.prepare("SELECT * FROM monitors WHERE state='active' AND verified_at IS NOT NULL AND next_due<=? AND (lock_until IS NULL OR lock_until<?) ORDER BY next_due LIMIT 3")
-  .bind(now(),now()).all<Monitor>();
+ const batchLimit=Math.max(1,Math.min(3,Number(env.SCHEDULE_BATCH_LIMIT)||3));
+ // Free-only deployments must not let dormant over-quota monitors consume each tick.
+ const freeGuard=paidEntitlementsEnabled(env)?'':`AND NOT EXISTS (
+   SELECT 1 FROM monitors older WHERE older.user_id=monitors.user_id AND
+   (older.created_at<monitors.created_at OR (older.created_at=monitors.created_at AND older.id<monitors.id)))`;
+ const due=await env.DB.prepare(`SELECT * FROM monitors WHERE state='active' AND verified_at IS NOT NULL AND next_due<=? AND (lock_until IS NULL OR lock_until<?) ${freeGuard} ORDER BY next_due LIMIT ?`)
+  .bind(now(),now(),batchLimit).all<Monitor>();
  for (const monitor of due.results) await runMonitor(env,monitor,'scheduled',ctx);
  // Daily cleanup only. Repeating historical DELETE queries every 15 min is costly in D1.
  const time=now(); const utc=new Date(time);
