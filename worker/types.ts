@@ -34,6 +34,11 @@ export interface Env {
  BILLING_WEBHOOKS_ENABLED?: string;
  RAZORPAY_WEBHOOK_SECRET?: string;
  SCHEDULE_BATCH_LIMIT?: string;
+ RAZORPAY_SANDBOX_ENABLED?: string;
+ RAZORPAY_TEST_KEY_ID?: string;
+ RAZORPAY_TEST_KEY_SECRET?: string;
+ RAZORPAY_TEST_STARTER_PLAN_ID?: string;
+ RAZORPAY_TEST_PRO_PLAN_ID?: string;
  RATE_LIMITER?: {limit(input:{key:string}):Promise<{success:boolean}>};
 }
 export interface Monitor {
