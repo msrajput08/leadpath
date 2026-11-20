@@ -46,16 +46,14 @@ export async function runMonitor(env: Env, monitor: Monitor, source: 'manual'|'s
  // Atomic claim: last_checked + next_due prevent overlapping executions across cron / manual callers.
  const guard=source==='scheduled' ? 'next_due<=?' : '(last_checked IS NULL OR last_checked<=?)';
  const threshold=source==='scheduled'?time:time-MANUAL_COOLDOWN;
- const result=await env.DB.prepare(`UPDATE monitors SET next_due=?,lock_until=?,last_checked=?,last_run_id=?,health='pending',updated_at=? WHERE id=? AND state='active' AND ${guard} AND (lock_until IS NULL OR lock_until<?)`)
-  .bind(time+plan.interval_seconds*1000,time+60000,time,runId,time,monitor.id,threshold,time).run();
+ const result=await env.DB.prepare(`UPDATE monitors SET next_due=?,schedule_interval_seconds=?,lock_until=?,last_checked=?,last_run_id=?,health='pending',updated_at=? WHERE id=? AND state='active' AND ${guard} AND (lock_until IS NULL OR lock_until<?)`)
+  .bind(time+plan.interval_seconds*1000,plan.interval_seconds,time+60000,time,runId,time,monitor.id,threshold,time).run();
  if (!result.meta.changes) return {accepted:false,message:'Monitor paused, locked or in manual-test cooldown (15 minutes).'};
  try {
   await env.DB.prepare("INSERT INTO runs (id,monitor_id,state,source,created_at,expires_at) VALUES(?,?,'pending',?,?,?)")
    .bind(runId,monitor.id,source,time,time+CONFIRMATION_WINDOW_MS).run();
   // Accounting is best-effort; dispatch safety does not depend on a counter update.
   await recordUsage(env,monitor.user_id,source,time).catch(()=>console.error('LeadPath usage counter update failed'));
-  await env.DB.prepare('UPDATE monitors SET schedule_interval_seconds=? WHERE id=? AND last_run_id=?')
-   .bind(plan.interval_seconds,monitor.id,runId).run();
  } catch {
   await env.DB.prepare("UPDATE monitors SET health='degraded',lock_until=NULL,next_due=? WHERE id=? AND last_run_id=?")
    .bind(time+MANUAL_COOLDOWN,monitor.id,runId).run();
