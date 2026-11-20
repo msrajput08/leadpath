@@ -84,6 +84,8 @@ test('Free is fail-closed, verified webhook alone does not activate payments, ex
   assert.equal((await DB.prepare('SELECT COUNT(*) c FROM payment_events').first()).c,1,'duplicate webhook idempotence');
   for(let i=2;i<=5;i++)assert.equal((await newMonitor(i)).status,201);
   assert.equal((await newMonitor(6)).status,403,'Starter quota from server');
+  await webhook(env,'evt_ignored_type',eventPayload('subscription.authenticated',subId,activate.created_at+1));
+  assert.equal((await getEntitlements(env,a.userId)).code,'starter','unrecognized signed events cannot downgrade a subscription');
   const lateCancel=eventPayload('subscription.cancelled',subId,activate.created_at-5);
   await webhook(env,'evt_old_cancel',lateCancel);
   assert.equal((await getEntitlements(env,a.userId)).code,'starter','older out-of-order event ignored');
@@ -93,6 +95,8 @@ test('Free is fail-closed, verified webhook alone does not activate payments, ex
   const latest=await DB.prepare('SELECT id,user_id,created_at FROM monitors WHERE user_id=? ORDER BY created_at DESC,id DESC LIMIT 1').bind(a.userId).first();
   assert.equal(await withinMonitorLimit(env,latest,1),false);
   assert.equal((await handleApi(request('/api/billing','GET',undefined,a),env,ctx)).status,200);
+  assert.equal((await handleApi(request('/api/billing','GET',undefined),env,ctx)).status,401,'billing overview requires authentication');
+  assert.equal((await handleApi(request('/api/billing','POST',{plan_code:'pro'},a),env,ctx)).status,404,'browser cannot upgrade its own plan');
   // A correctly signed webhook for an unlinked provider ID must not create a subscription.
   await webhook(env,'evt_unknown',eventPayload('subscription.activated','sub_unknown123',activate.created_at+2));
   assert.equal((await getEntitlements(env,a.userId)).code,'free');
