@@ -25,8 +25,8 @@ export function liveCheckoutReady(env:Env):boolean {
  return liveApiReady(env)&&env.LIVE_BILLING_ENABLED==='true'&&
   env.LIVE_BILLING_WEBHOOKS_ENABLED==='true'&&!!env.RAZORPAY_LIVE_WEBHOOK_SECRET&&
   env.PAID_ENTITLEMENTS_ENABLED==='true'&&env.LIVE_CAPACITY_REVIEWED==='true'&&
-  Number.isInteger(pilotMax)&&pilotMax>=1&&pilotMax<=10&&
-  Number.isInteger(batch)&&batch>=30&&batch<=45;
+  Number.isInteger(pilotMax)&&pilotMax===1&&
+  Number.isInteger(batch)&&batch>=30&&batch<=40;
 }
 
 class ProviderError extends Error {
