@@ -1,0 +1,82 @@
+{
+  "/": {
+    "title": "LeadPath | Confirm Make to Google Sheets Delivery",
+    "description": "Know whether your Make webhook actually delivers to Google Sheets. LeadPath uses synthetic checks and secure callbacks to reveal silent workflow failures.",
+    "kind": "software"
+  },
+  "/how-it-works": {
+    "title": "How LeadPath Checks Automation Delivery",
+    "description": "See how synthetic webhook tests, Google Sheets writes and authenticated callbacks work together to confirm downstream delivery.",
+    "kind": "page"
+  },
+  "/features": {
+    "title": "LeadPath Features | Lead Workflow Monitoring",
+    "description": "Explore six-hour synthetic tests, secure delivery confirmation, monitoring history, failure alerts and a free local JSON checker.",
+    "kind": "page"
+  },
+  "/pricing": {
+    "title": "LeadPath Pricing | Free Make Workflow Monitor",
+    "description": "LeadPath currently offers one free Make to Google Sheets monitor, with no LeadPath subscription or credit card. External service quotas apply.",
+    "kind": "page"
+  },
+  "/checker": {
+    "title": "Free JSON & Webhook Format Checker | LeadPath",
+    "description": "Check JSON payload syntax and webhook URL formatting in your browser. No signup or network request. Does not verify actual delivery.",
+    "kind": "software"
+  },
+  "/docs": {
+    "title": "Make to Google Sheets Setup Guides | LeadPath",
+    "description": "Learn to configure a Make webhook, Google Sheets Add a Row and secure callback, plus diagnose common workflow delivery failures.",
+    "kind": "page"
+  },
+  "/faq": {
+    "title": "LeadPath FAQ | Webhook Monitoring Answers",
+    "description": "Answers about webhook 200 responses, synthetic test data, free monitoring, Make credits and delivery confirmation limits.",
+    "kind": "page"
+  },
+  "/contact": {
+    "title": "Contact LeadPath Support",
+    "description": "Get help with your LeadPath workspace, monitoring configuration, sign-in issues or privacy and account-data requests.",
+    "kind": "page"
+  },
+  "/privacy": {
+    "title": "LeadPath Privacy Policy",
+    "description": "How LeadPath handles account information, encrypted webhook URLs, synthetic test data, monitoring history, retention and deletion.",
+    "kind": "page"
+  },
+  "/terms": {
+    "title": "LeadPath Terms of Service",
+    "description": "Read the terms, acceptable use rules, provider dependencies and limitations of LeadPath's free workflow monitoring tools.",
+    "kind": "page"
+  },
+  "/docs/webflow-make": {
+    "title": "Webflow Form Not Triggering Make? | LeadPath",
+    "description": "Trace missing Webflow form submissions and Make scenario runs; learn which steps synthetic webhook checks can and cannot verify.",
+    "kind": "article"
+  },
+  "/docs/make-sheets": {
+    "title": "Make Webhook Not Updating Google Sheets? | LeadPath",
+    "description": "Troubleshoot Make webhook runs, Google Sheets mapping and successful delivery acknowledgments when a 200 response is misleading.",
+    "kind": "article"
+  },
+  "/docs/crm-missing": {
+    "title": "Website Leads Not Reaching CRM | LeadPath Guide",
+    "description": "Isolate form, automation and CRM failures using safe correlation identifiers and destination checks without claiming universal CRM support.",
+    "kind": "article"
+  },
+  "/docs/webhook-200": {
+    "title": "Webhook Returns 200 but Automation Fails | LeadPath",
+    "description": "Understand why HTTP 200 is not proof of destination delivery and how matching run IDs and callbacks expose silent failures.",
+    "kind": "article"
+  },
+  "/docs/silent-failures": {
+    "title": "How to Detect Silent Workflow Failures | LeadPath",
+    "description": "Use authorized synthetic test records, destination acknowledgments and sensible monitoring intervals to uncover workflow failures.",
+    "kind": "article"
+  },
+  "/docs/free-monitoring": {
+    "title": "Monitor Lead Automation for Free | LeadPath Guide",
+    "description": "Set up a free Make to Google Sheets synthetic monitoring flow, configure secure callbacks and estimate Make credits.",
+    "kind": "article"
+  }
+}
