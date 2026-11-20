@@ -192,3 +192,23 @@ test('JSON-LD is parseable and matches visible software and documentation offeri
   else expect(schema['@graph'].some((item:{'@type':string})=>item['@type']==='BreadcrumbList')).toBeTruthy();
  }
 });
+
+test('signed-in visitors see account and dashboard navigation instead of signup links',async({page})=>{
+ await page.route('**/api/me',async route=>{
+  await route.fulfill({status:200,contentType:'application/json',
+   body:JSON.stringify({id:'sample',name:'LeadPath User',email:'person@example.invalid',csrf_token:'test'})});
+ });
+ await page.goto('/');
+ await expect(page.locator('.site-header').getByRole('link',{name:'Dashboard'})).toBeVisible();
+ await expect(page.locator('.site-header').getByRole('link',{name:'Account'})).toBeVisible();
+ await expect(page.locator('.site-header').getByRole('link',{name:'Log in'})).toHaveCount(0);
+});
+test('Starter pilot pricing opens CTA only when public server availability explicitly says true',async({page})=>{
+ await page.route('**/api/public/billing',async route=>{
+  await route.fulfill({status:200,contentType:'application/json',
+   body:JSON.stringify({starter_pilot_available:true,pro_available:false,pilot_plan:'starter',currency:'INR'})});
+ });
+ await page.goto('/pricing');
+ await expect(page.getByRole('link',{name:/Open Starter in account/i})).toHaveAttribute('href','/account');
+ await expect(page.getByText('Pro subscriptions are not open')).toBeVisible();
+});
