@@ -1,45 +1,49 @@
-# LeadPath production-readiness gate
+# LeadPath — public production release gate (20 November 2026)
 
-**Status: Limited live alpha; public paid launch NOT YET APPROVED.** A successful Make → Google Sheets callback is one integration test, not a full production certification.
+**Current:** The code is deployed on the operator-reported Cloudflare workers.dev origin and the operator reports successful Make → Google Sheets callback, failure, recovery, and scheduled Cron tests. These live assertions were supplied by the operator, not independently reproduced in CI. GitHub Actions verifies TypeScript, Node API/D1 integration tests, dependency audit, Vite build, local database migrations, and Playwright browser smoke tests.
 
-## Hardening added
-- GitHub/Google OAuth entry points and public status now use Cloudflare edge rate limiting.
-- API and callback JSON payloads are streamed with strict byte ceilings (400/413/415 on client errors).
-- Successful run status, acknowledgment and current monitor status commit together in an atomic D1 batch.
-- Scheduled handler surfaces failures to Cloudflare Observability rather than silently reporting success.
-- Static assets include a content security policy, HSTS and defensive headers.
-- Dashboard counts now explicitly describe only the latest 50 runs.
+## Completed in repository
 
-## Required real-environment acceptance tests
-1. Confirm deployment of the hardening commit and verify that GitHub OAuth, dashboard, Make webhook, Google Sheets write and callback still produce a matching Confirmed run.
-2. Disable Make's last HTTP callback module (not the Google Sheets write) and run a new test; after 30 minutes plus next cron sweep, verify Unconfirmed and no false Healthy result.
-3. Produce a second failed check and verify exactly one failure alert; restore the callback and verify a subsequent recovery alert and Healthy status.
-4. Confirm an automatic run after six hours with no browser open. Compare LeadPath run_id with the Google Sheets row and check Cloudflare Cron Past Events.
-5. Validate wrong Bearer secret, mismatched run_id, expired/duplicate callbacks, cross-account authorization, CSRF, export and deletion.
-6. Check desktop/mobile login and dashboard usability, page CSP in browser DevTools, keyboard access, and route handling.
-7. Review Workers/D1 request and storage usage plus Make credit consumption and email/Telegram delivery if configured.
-8. Monitor production errors, run a database backup/restore drill, rehearse deployment rollback, and verify zero secrets appear in build logs.
+- Support email `minty.12.shar@gmail.com` on public Contact page and footer.
+- Privacy/Terms describe actual account data, D1, Supabase Auth, Brevo SMTP, OAuth, Make synthetic events, known deletion boundaries, 90-day run retention and 365-day audit retention. **Professional legal review and operator identity are still required before unrestricted commercial rollout.**
+- Pricing lists **only the available Free plan**, no invented paid plan values or unused checkout.
+- Public routes have canonical descriptions; private/auth routes opt out of indexing.
+- Authentication, email verification and recovery, callback authorization, CSRF, encryption, rate limiting and migration checks are tested with simulated providers and local Worker browser sessions.
+- Site uses only synthetic test records (no real customer submissions).
+- GitHub CI stays the merge gate and runs actual browser tests. Preserve test fixtures; they are NOT mock marketing claims.
 
-## Unresolved blockers for general public release
-- Publish an actual support contact and operator-specific Privacy Policy and Terms; current pages are preliminary templates and need legal review.
-- Add ownership verification for Make webhook endpoints; a checkbox alone does not prove authorization and may enable credit abuse.
-- Dependency lockfile is now committed and CI uses npm ci; continue dependency vulnerability audits and scheduled updates.
-- CI now executes Playwright Chromium smoke tests against a local Wrangler Worker with D1 migrations. Real Cloudflare/Make and multi-user browser E2E coverage remain unverified.
-- Add server-rendered/pre-rendered documentation and validate search indexing; client-only pages do not guarantee organic acquisition.
-- Confirm retention cleanup on Cloudflare cron and correct alert delivery under real errors.
-- Cloudflare Free rate limiting is per location, not a globally enforced anti-abuse policy or uptime SLA.
-- The Cron currently processes at most three due monitors every fifteen minutes. An ideal 6-hour cadence supports roughly seventy-two active monitors before scheduling backlog, excluding failures and overhead; capacity planning is required before broad signup.
-- LeadPath monitors the Make webhook onward, not the original website form or arbitrary CRM/email delivery.
+## Actual launch checks still requiring operator or independent live verification
 
-## Rollout / rollback
-- Keep the working production branch unchanged until GitHub Actions tests pass for the hardening PR.
-- When merged, Cloudflare's GitHub integration can auto-deploy; inspect the active version and re-test core login + callback.
-- If smoke tests fail, roll back Cloudflare to the previous deployment and investigate before re-releasing.
-- Never put OAuth secrets, Telegram tokens, Make webhook URLs or callback credentials into source control or screenshots.
+1. Confirm the exact deployed commit in Cloudflare and conduct a fresh real email/signup/login/reset/OAuth smoke test.
+2. Verify a real Make webhook → Sheets row → matching callback, a missing callback timeout, recovery alert and Cron run after the browser closes on the **new release**.
+3. Test account export and deletion, including the fact **Supabase Auth identities are not removed by deleting the LeadPath D1 account**. Put an operational support process in place for Supabase identity deletion or implement secure provider-admin cleanup before broadly inviting users.
+4. Check SPF/DKIM and domain alignment for Brevo sender. Mail arriving in Spam is a deliverability issue, not solved by an on-screen notice.
+5. Verify free-tier Workers CPU/D1 quotas, Make credits, outbound email limits and scheduled Cron throughput under expected concurrent load. Current scheduler handles a limited batch per tick; avoid unlimited acquisition before capacity controls are tested.
+6. Validate mobile/browser accessibility, real Cloudflare response headers, security logs and alert delivery on the deployed version.
+7. Export a D1 backup (and perform a restore drill in a separate disposable database), rehearse rollback, confirm that build and logs disclose no secrets.
+8. Review Terms/Privacy for the legally responsible operator, applicable jurisdiction, data-rights obligations and required business notices. Do not fabricate a legal entity or governing jurisdiction.
+9. Submit the real sitemap to Google Search Console and verify live crawling/indexing. React SPA content may not be indexed reliably without HTML pre-rendering or SSR.
 
-## D1 backup and recovery (operator action required)
-- Cloudflare D1 Free offers a 7-day Time Travel window; it is not an infinite backup history. See Cloudflare D1 Time Travel documentation.
-- Before changes involving user data, use Wrangler with your authenticated Cloudflare account:
-  `mkdir backups` (first time), then `npx wrangler d1 export DB --remote --output backups/leadpath-backup.sql`
-- Keep the exported SQL securely offline. It contains user profiles and monitoring records; do not commit it or share it in issue comments.
-- Verify the backup file and practice restore in a disposable database. Never overwrite the production database during a drill.
+## Known product limits
+
+- One active or paused Make → Google Sheets monitor per LeadPath account; not a full website-form-to-CRM trace.
+- Six-hour check interval is a target; the runtime and third-party quotas can delay runs.
+- Confirmation relies on configuring the authenticated HTTP callback **after** the Google Sheets write.
+- No paid billing, advertised SLA or guarantee that every lost lead will be detected.
+- Cloudflare's free Workers rate limiting is per edge location and does not replace layered abuse defenses.
+
+## Release/rollback
+
+1. Inspect GitHub PR CI; never deploy failing source.
+2. Operator runs `git switch main`, `git pull --ff-only`, `npm run deploy` only after merge.
+3. Observe the deployed Cloudflare version ID; re-run private auth and Make callbacks.
+4. Roll back in Cloudflare if production smoke tests fail.
+5. Keep secrets exclusively in Cloudflare and Supabase/Brevo dashboards; never paste into chat, screenshots or repository.
+
+## D1 backup
+
+```powershell
+npx wrangler d1 export leadpath-db --remote --output="$HOME\leadpath-d1-backup.sql"
+```
+
+Backups contain user and monitoring metadata. Keep securely offline and never commit them. D1 Time Travel and restore capabilities depend on the Cloudflare plan; do not assume unlimited retention.

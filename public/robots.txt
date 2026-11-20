@@ -2,6 +2,12 @@ User-agent: *
 Allow: /
 Disallow: /dashboard
 Disallow: /account
+Disallow: /login
+Disallow: /signup
+Disallow: /forgot-password
+Disallow: /resend-verification
+Disallow: /verify-email
+Disallow: /reset-password
 Disallow: /api/
 Disallow: /auth/
 Sitemap: https://leadpath.monty-08-raj.workers.dev/sitemap.xml
