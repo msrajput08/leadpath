@@ -54,6 +54,7 @@ test('test-only provider creation verifies INR price, binds subscription to auth
  const originalFetch=globalThis.fetch,seen=[];
  globalThis.fetch=async(url,options)=>{
   assert.ok(String(url).startsWith('https://api.razorpay.com/v1/'));
+  assert.equal(options.redirect,'manual','Workers must not use unsupported redirect:error or forward credentials');
   assert.equal(options.headers.Authorization,'Basic '+btoa(env.RAZORPAY_TEST_KEY_ID+':'+env.RAZORPAY_TEST_KEY_SECRET));
   seen.push(String(url));
   if(String(url).endsWith('plans/plan_StarterTest2026'))return Response.json({
@@ -124,4 +125,21 @@ test('Razorpay TEST plan lookup exposes only safe HTTP diagnostic and leaves no 
    assert.equal((await DB.prepare('SELECT COUNT(*) n FROM billing_creation_locks').first()).n,0);
   }finally{globalThis.fetch=originalFetch;DB.sql.close();}
  }
+});
+
+test('sandbox refuses Razorpay redirects and does not create a subscription or lock',async()=>{
+ const {DB,send}=await setup(),originalFetch=globalThis.fetch;
+ let calls=0;
+ globalThis.fetch=async(_url,options)=>{
+  assert.equal(options.redirect,'manual');
+  calls++;
+  return new Response(null,{status:302,headers:{Location:'https://attacker.example/collect'}});
+ };
+ try{
+  const response=await send('/api/billing/sandbox/create','POST',{plan_code:'starter'});
+  assert.equal(response.status,502);
+  assert.equal(calls,1,'redirect cannot cause a second API request or credential forwarding');
+  assert.equal((await DB.prepare('SELECT COUNT(*) n FROM billing_creation_locks').first()).n,0);
+  assert.equal((await DB.prepare('SELECT COUNT(*) n FROM user_subscriptions').first()).n,0);
+ }finally{globalThis.fetch=originalFetch;DB.sql.close();}
 });
