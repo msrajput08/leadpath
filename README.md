@@ -116,7 +116,7 @@ A successful initial POST **does not** change a run to Confirmed. Only the authe
 3. Generate the public sitemap for the exact host **before building**:
 
 ```bash
-nodescripts/generate-sitemap.mjs https://leadpath.YOUR-ACCOUNT.workers.dev
+node scripts/generate-sitemap.mjs https://leadpath.monty-08-raj.workers.dev
 ```
 
 4. Store credentials as Cloudflare Worker secrets (add at least one OAuth provider):
@@ -148,7 +148,7 @@ npm run deploy
    - Verify scheduled Cron checks while no browser session is open.
    - Confirm no app secrets, OAuth tokens or full webhook URLs appear in logs/responses.
 
-**Live deployment was not performed in the creation environment.** A successful `wrangler deploy` command is not by itself proof that OAuth, Make, Sheets and callback truly work.
+**The operator reports a live Cloudflare deployment and real OAuth/Make/Sheets/callback tests.** Passing `wrangler deploy` or local CI alone does not prove that these integrations work on a newly deployed revision; smoke-test every release.
 
 ## 6. Testing
 
@@ -175,7 +175,7 @@ Publicly documented limits checked 18 November 2026:
 
 At three one-credit Make modules: four scheduled runs/day × 3 credits × 30 days = **360 credits/month**. Three extra manual runs/day at most = **270 additional credits/month**, for an illustrative **630-credit month**. A 31-day month is **651 credits** on the same assumptions. These figures exclude all your other Make usage, retry behavior, provider-side overhead and any module-specific costs. Make free credits do not roll over.
 
-**Expected infrastructure bill at the example workload: ₹0/month, not verified with a real deployment.** Exceeding free-tier quotas can stop requests or monitoring; it does not mean the service is guaranteed to remain available. Google may require a verified domain for public approval, which isn't assured by owning a free `workers.dev` hostname.
+**Illustrative infrastructure target: ₹0/month under current free-tier quotas; not a guaranteed bill or independently verified usage report.** Exceeding free-tier quotas can stop requests or monitoring; it does not mean the service is guaranteed to remain available. Google may require a verified domain for public approval, which isn't assured by owning a free `workers.dev` hostname.
 
 ## 8. Security model / caveats
 
