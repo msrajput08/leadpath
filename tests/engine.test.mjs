@@ -163,3 +163,36 @@ test('scheduler claim is idempotent; upstream errors are not marked confirmed; p
   assert.equal(denied.accepted,false,'Free over-limit monitor cannot send a manual check');
  }finally{globalThis.fetch=originalFetch;DB.sql.close();}
 });
+
+test('paid cron excludes over-quota free monitors before LIMIT and leaves capacity for other accounts',async()=>{
+ const DB=makeDb(),time=Date.now();
+ const freeId=crypto.randomUUID(),paidId=crypto.randomUUID();
+ const env={DB,BASE_URL:'https://leadpath.example',PAID_ENTITLEMENTS_ENABLED:'true',SCHEDULE_BATCH_LIMIT:'3'};
+ try{
+  for(const [user,mail] of [[freeId,'freepilot@example.test'],[paidId,'paidpilot@example.test']])
+   await DB.prepare('INSERT INTO users(id,email,name,created_at,updated_at) VALUES(?,?,?,?,?)')
+    .bind(user,mail,'Pilot',time,time).run();
+  // Existing over-quota rows can occur after a downgrade; only the oldest Free
+  // monitor must compete with the three paid monitors in each cron SQL batch.
+  for(const [user,count] of [[freeId,6],[paidId,3]]){
+   for(let i=0;i<count;i++){
+    const due=time-(user===freeId?100000:20000)+i;
+    await DB.prepare(`INSERT INTO monitors
+     (id,user_id,name,webhook_ciphertext,secret_hash,verified_at,state,health,interval_seconds,next_due,created_at,updated_at)
+     VALUES(?,?,?,?,?,?,'active','healthy',21600,?,?,?)`)
+     .bind(crypto.randomUUID(),user,'Mon '+i,'encrypted-secret','hash',time-200000,due,time-100000+i,time).run();
+   }
+  }
+  await DB.prepare(`INSERT INTO user_subscriptions(id,user_id,plan_code,provider,provider_subscription_id,
+    status,current_period_end,created_at,updated_at,billing_mode)
+    VALUES(?,?,'starter','razorpay',?,'active',?,?,?,'live')`)
+   .bind(crypto.randomUUID(),paidId,'sub_RealPaidPilot123',time+86400000,time,time).run();
+  await scheduled(env,ctx);
+  const free=await DB.prepare(`SELECT COUNT(*) n FROM runs r JOIN monitors m ON m.id=r.monitor_id
+   WHERE m.user_id=?`).bind(freeId).first();
+  const paid=await DB.prepare(`SELECT COUNT(*) n FROM runs r JOIN monitors m ON m.id=r.monitor_id
+   WHERE m.user_id=?`).bind(paidId).first();
+  assert.equal(free.n,1,'only oldest over-quota Free monitor is considered');
+  assert.equal(paid.n,2,'remaining cron capacity is available to paid account');
+ }finally{DB.sql.close();}
+});
