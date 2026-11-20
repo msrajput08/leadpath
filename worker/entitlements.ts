@@ -4,7 +4,8 @@ export type PlanCode = 'free' | 'starter' | 'pro';
 export interface Entitlements {
  code: PlanCode;
  display_name: string;
- price_usd_cents: number;
+ currency: string;
+ price_minor_units: number;
  monitor_limit: number;
  interval_seconds: number;
  manual_runs_per_day: number;
@@ -15,7 +16,7 @@ export interface Entitlements {
 
 type PlanRow = Omit<Entitlements,'available_for_purchase'> & {available_for_purchase:number};
 const mapPlan=(p:PlanRow):Entitlements=>({
- code:p.code,display_name:p.display_name,price_usd_cents:p.price_usd_cents,
+ code:p.code,display_name:p.display_name,currency:p.currency,price_minor_units:p.price_minor_units,
  monitor_limit:p.monitor_limit,interval_seconds:p.interval_seconds,
  manual_runs_per_day:p.manual_runs_per_day,history_days:p.history_days,
  alert_level:p.alert_level,available_for_purchase:p.available_for_purchase===1
@@ -57,7 +58,7 @@ export async function recordUsage(env:Env,userId:string,source:'manual'|'schedul
 export async function billingOverview(env:Env,userId:string) {
  const [current,plans,usage,count,subscription]=await Promise.all([
   getEntitlements(env,userId),
-  env.DB.prepare('SELECT * FROM subscription_plans ORDER BY price_usd_cents').all<PlanRow>(),
+  env.DB.prepare('SELECT * FROM subscription_plans ORDER BY price_minor_units').all<PlanRow>(),
   env.DB.prepare('SELECT scheduled_checks,manual_checks FROM monthly_usage WHERE user_id=? AND period_utc=?')
    .bind(userId,new Date().toISOString().slice(0,7)).first<{scheduled_checks:number;manual_checks:number}>(),
   env.DB.prepare('SELECT COUNT(*) AS total FROM monitors WHERE user_id=?').bind(userId).first<{total:number}>(),
