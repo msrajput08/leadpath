@@ -86,7 +86,17 @@ export async function createLiveSubscription(env:Env,userId:string,req:Request):
   created=await razorpay<RazorpaySubscription>(env,'POST','subscriptions',
    {plan_id:validated.providerId,total_count:12,quantity:1,customer_notify:true,
     notes:{app:'LeadPath',checkout_nonce:nonce}});
- }catch(e){return providerFailed(e);}
+ }catch(e){
+  // Definite 4xx rejection means Razorpay did not create a subscription.
+  // Timeouts and 5xx are uncertain, so retain the reservation for safe manual reconciliation.
+  if(e instanceof ProviderError&&e.status>=400&&e.status<500&&e.status!==408){
+   await env.DB.batch([
+    env.DB.prepare('DELETE FROM live_billing_slots WHERE user_id=? AND provider_subscription_id IS NULL').bind(userId),
+    env.DB.prepare('DELETE FROM billing_creation_locks WHERE user_id=? AND nonce=?').bind(userId,nonce)
+   ]);
+  }
+  return providerFailed(e);
+ }
  if(!validSubscription(created.id)||created.plan_id!==validated.providerId||!validGatewayUrl(created.short_url))
   return fail(502,'Unexpected live subscription response. Contact support before trying another checkout.');
  try{
@@ -137,6 +147,9 @@ export async function syncLiveSubscription(env:Env,userId:string):Promise<Respon
   WHERE user_id=? AND provider_subscription_id=? AND billing_mode='live'`)
   .bind(normalized.status,normalized.start,normalized.end,normalized.cancel?1:0,t,t,
    userId,record.provider_subscription_id).run();
+ if(normalized.status==='cancelled'||normalized.status==='expired')
+  await env.DB.prepare('DELETE FROM live_billing_slots WHERE user_id=? AND provider_subscription_id=?')
+   .bind(userId,record.provider_subscription_id).run();
  return json({status:normalized.status,cancel_at_period_end:normalized.cancel,
   current_period_end:normalized.end,paid_access:normalized.status==='active'&&env.PAID_ENTITLEMENTS_ENABLED==='true'});
 }
