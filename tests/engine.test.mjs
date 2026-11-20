@@ -3,7 +3,8 @@ import assert from 'node:assert/strict';
 import fs from 'node:fs';
 import {DatabaseSync} from 'node:sqlite';
 import {handleApi} from '../.test-build/api.js';
-import {confirmCallback,sweepTimedOut,scheduled,runMonitor} from '../.test-build/engine.js';
+import {confirmCallback,sweepTimedOut,scheduled,runMonitor,runQueuedMonitor} from '../.test-build/engine.js';
+import worker from '../.test-build/index.js';
 import {sha256,newRandomString,encryptSecret} from '../worker/security.mjs';
 function makeDb(){
  const sql=new DatabaseSync(':memory:');sql.exec(fs.readFileSync(new URL('../db/migrations/0001_init.sql',import.meta.url),'utf8'));
@@ -195,4 +196,48 @@ test('paid cron excludes over-quota free monitors before LIMIT and leaves capaci
   assert.equal(free.n,1,'only oldest over-quota Free monitor is considered');
   assert.equal(paid.n,2,'remaining cron capacity is available to paid account');
  }finally{DB.sql.close();}
+});
+
+test('Cloudflare Free Queue dispatch is idempotent, keeps callback secrets out of messages, and isolates expiry sweeps',async()=>{
+ const DB=makeDb(),time=Date.now(),userId=crypto.randomUUID(),monitorId=crypto.randomUUID();
+ const url='https://hook.eu1.make.com/FreeQueuePilot123';
+ const secretKey='b'.repeat(64),encrypted=await encryptSecret(url,secretKey);
+ const queueMessages=[],env={DB,BASE_URL:'https://leadpath.example',WEBHOOK_ENCRYPTION_KEY:secretKey,
+  MONITOR_QUEUE:{async sendBatch(messages){queueMessages.push(...messages);}}};
+ const oldFetch=globalThis.fetch;let dispatched=0;
+ try{
+  await DB.prepare('INSERT INTO users(id,email,name,created_at,updated_at) VALUES(?,?,?,?,?)')
+   .bind(userId,'queue-user@example.test','Queue User',time,time).run();
+  await DB.prepare(`INSERT INTO monitors(id,user_id,name,webhook_ciphertext,secret_hash,
+    verified_at,state,health,interval_seconds,next_due,created_at,updated_at)
+    VALUES(?,?,?,?,?,?,'active','healthy',21600,?,?,?)`)
+   .bind(monitorId,userId,'Free queue test',encrypted,'dummy-hash',time-86400000,time-1000,time-86400000,time).run();
+  await scheduled(env,ctx);
+  assert.equal((await DB.prepare('SELECT COUNT(*) AS n FROM runs').first()).n,0,
+   'Cron publishes IDs without sending Make payload directly');
+  assert.equal(queueMessages.length,2,'one due monitor plus one timeout-sweep job');
+  assert.deepEqual(queueMessages[0].body,{monitor_id:monitorId,enqueued_at:queueMessages[0].body.enqueued_at});
+  assert.equal(queueMessages[1].body.kind,'sweep');
+  assert.equal(JSON.stringify(queueMessages).includes(url),false,'queued job must not leak Make webhook URL');
+  assert.equal(JSON.stringify(queueMessages).includes(encrypted),false,'queued job must not leak encrypted webhook');
+  globalThis.fetch=async(target,options)=>{
+   assert.equal(target,url);assert.equal(options.redirect,'manual');dispatched++;
+   return new Response('accepted',{status:200});
+  };
+  const acks={ack:0,retry:0};
+  const message={body:queueMessages[0].body,ack(){acks.ack++;},retry(){acks.retry++;}};
+  await worker.queue({queue:'leadpath-monitor-jobs',messages:[message]},env,ctx);
+  assert.equal(acks.ack,1);assert.equal(acks.retry,0);
+  assert.equal(dispatched,1);
+  await runQueuedMonitor(env,queueMessages[0].body,ctx);
+  assert.equal(dispatched,1,'at-least-once message replays cannot trigger a second Make dispatch');
+  assert.equal((await DB.prepare('SELECT COUNT(*) AS n FROM runs').first()).n,1);
+  await DB.prepare('UPDATE runs SET expires_at=? WHERE monitor_id=?').bind(Date.now()-1,monitorId).run();
+  await runQueuedMonitor(env,queueMessages[1].body,ctx);
+  assert.equal((await DB.prepare('SELECT state FROM runs WHERE monitor_id=?').bind(monitorId).first()).state,'unconfirmed',
+   'separate bounded timeout sweep processes expired run');
+  const unexpected={body:{monitor_id:monitorId},ack(){throw Error('Unexpected ack');},retry(){acks.retry++;}};
+  await worker.queue({queue:'wrong-queue',messages:[unexpected]},env,ctx);
+  assert.equal(acks.retry,1,'unexpected queue must never process a monitoring job');
+ }finally{globalThis.fetch=oldFetch;DB.sql.close();}
 });
