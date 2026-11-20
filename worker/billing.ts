@@ -61,10 +61,13 @@ function parseRazorpay(input:unknown,eventId:string):ProviderUpdate|null{
  // Only a signed active subscription with a valid future period may renew access.
  const periodEnd=asUnixMs(entity?.current_end);
  const validActive=status==='active'&&entity?.status==='active'&&periodEnd!==null&&periodEnd>Date.now();
+ const cancelAtPeriodEnd=entity?.cancel_at_cycle_end===1 || entity?.cancel_at_cycle_end===true;
+ // A scheduled end-of-cycle cancellation retains prepaid access only through its verified period end.
+ const paidThroughCancellation=status==='cancelled'&&cancelAtPeriodEnd&&periodEnd!==null&&periodEnd>Date.now();
  return {provider:'razorpay',eventId,eventType:event.event,subscriptionId,
-  status:status==='active'&&!validActive?'pending':status,
+  status:paidThroughCancellation?'active':status==='active'&&!validActive?'pending':status,
   periodStart:asUnixMs(entity?.current_start),periodEnd,
-  cancelAtPeriodEnd:entity?.cancel_at_cycle_end===1 || entity?.cancel_at_cycle_end===true,
+  cancelAtPeriodEnd,
   createdAt};
 }
 // Adapter boundary: a later provider implementation must produce a verified,
