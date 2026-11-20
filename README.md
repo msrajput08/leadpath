@@ -8,7 +8,7 @@
 
 ## What's built
 
-- React + Vite + TypeScript marketing website, free local JSON/URL diagnostic checker, responsive dashboard, light/dark theme, guides, Contact page, factual Privacy Policy and Terms disclosures (subject to operator legal review).
+- React + Vite + TypeScript pre-rendered, search-friendly marketing website, free local JSON/URL diagnostic checker, responsive dashboard, light/dark theme, guides, Contact page, factual Privacy Policy and Terms disclosures (subject to operator legal review).
 - Cloudflare Worker API (dependency-free native handler) and D1 migrations. Worker includes scheduled Cron monitoring, HTTPS Make webhook URL allowlist, encrypted webhook URLs at rest, 256-bit hashed callback credentials, 30-minute confirmation window, replay prevention, concurrency protection, failure/recovery tracking, in-app alerts and optional Telegram delivery.
 - Google OAuth (signed ID-token verification, PKCE, nonce/state checks) and optional GitHub OAuth (authorization code + PKCE, verified email). Secure HttpOnly sessions and CSRF token.
 - One active/paused monitor maximum per user, six-hour scheduled cadence, **max three manual tests per rolling 24 hours**, minimum 15-minute manual cooldown.
@@ -209,3 +209,7 @@ Email/password accounts use hosted **Supabase Auth** for password hashing, email
 ## Current public release gate
 
 Do not infer production assurance from passing simulated tests. The operator must validate the deployed Worker, database backup/recovery, SMTP inbox delivery, quota/cost visibility, security monitoring, privacy identity-deletion process and final legal business identity before unrestricted general-public onboarding. See [production readiness](PRODUCTION_READINESS.md).
+
+## SEO and crawlable public pages
+
+`npm run build` generates 16 static HTML pages with unique titles, descriptions, canonical links, JSON-LD schema, related-guide links, `sitemap.xml`, `robots.txt` and a real 404 response. React hydrates the static markup for interactivity. Private auth and account pages are separate noindex shells. Read [SEO release and Google Search Console steps](docs/seo-release.md). **Search Console verification and indexing require separate operator actions; ranking is not guaranteed.**
