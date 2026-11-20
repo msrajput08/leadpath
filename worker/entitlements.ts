@@ -73,5 +73,6 @@ export async function billingOverview(env:Env,userId:string) {
   usage:{scheduled_checks:usage?.scheduled_checks||0,manual_checks:usage?.manual_checks||0},
   subscription:subscription?{plan_code:subscription.plan_code,status:subscription.status,
    current_period_end:subscription.current_period_end,cancel_at_period_end:!!subscription.cancel_at_period_end}:null,
-  checkout_enabled:false,paid_features_enabled:paidEntitlementsEnabled(env)};
+  checkout_enabled:false,sandbox_checkout_enabled:env.RAZORPAY_SANDBOX_ENABLED==='true'&&!!env.RAZORPAY_TEST_KEY_ID?.startsWith('rzp_test_')&&!!env.RAZORPAY_TEST_KEY_SECRET&&!!env.RAZORPAY_TEST_STARTER_PLAN_ID&&!!env.RAZORPAY_TEST_PRO_PLAN_ID,
+  paid_features_enabled:paidEntitlementsEnabled(env)};
 }
