@@ -50,6 +50,7 @@ export interface Env {
  LIVE_MAX_PAID_ACCOUNTS?: string;
  LIVE_PILOT_PLAN?: string;
  ALLOW_TEST_BILLING_ENTITLEMENTS?: string;
+ MONITOR_QUEUE?: {sendBatch(messages:{body:{monitor_id:string;enqueued_at:number}}[]):Promise<void>};
  RATE_LIMITER?: {limit(input:{key:string}):Promise<{success:boolean}>};
 }
 export interface Monitor {
