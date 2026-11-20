@@ -10,8 +10,9 @@ export default function BillingPanel({compact=false,csrfToken}:{compact?:boolean
  const [message,setMessage]=useState('');
  const [sandboxBusy,setSandboxBusy]=useState(false);
  const [sandboxUrl,setSandboxUrl]=useState('');
+ const [sandboxMessage,setSandboxMessage]=useState('');
  async function sandboxAction(path:string,body:unknown={}){
-  setSandboxBusy(true);setMessage('');setSandboxUrl('');
+  setSandboxBusy(true);setSandboxMessage('Connecting to Razorpay Test Mode…');setSandboxUrl('');
   try {
    const response=await fetch(path,{method:'POST',credentials:'same-origin',
     headers:{'content-type':'application/json','X-CSRF-Token':csrfToken||''},body:JSON.stringify(body)});
@@ -21,9 +22,10 @@ export default function BillingPanel({compact=false,csrfToken}:{compact?:boolean
     const link=new URL(result.checkout_url);
     if(link.protocol!=='https:'||link.hostname!=='rzp.io')throw new Error('Invalid hosted checkout URL');
     setSandboxUrl(link.toString());
-    setMessage('Razorpay TEST checkout created; no live payment or paid features enabled.');
-   } else setMessage(result.message||'Test cancellation submitted.');
-  }catch(error){setMessage(error instanceof Error?error.message:'Sandbox request failed');}
+    setSandboxMessage('Test checkout created. Opening Razorpay…');
+    window.location.assign(link.toString());
+   } else setSandboxMessage(result.message||'Test cancellation submitted.');
+  }catch(error){setSandboxMessage(error instanceof Error?error.message:'Sandbox request failed');}
   finally{setSandboxBusy(false);}
  }
  useEffect(()=>{
@@ -56,11 +58,12 @@ export default function BillingPanel({compact=false,csrfToken}:{compact?:boolean
    {details.sandbox_checkout_enabled&&csrfToken&&<div className="sandbox-controls">
     <p className="small"><strong>Sandbox only:</strong> Razorpay test-mode checkout. No real payments or premium entitlements.</p>
     <div className="row-inline wrap">
-     <button type="button" className="btn btn-secondary" disabled={sandboxBusy} onClick={()=>sandboxAction('/api/billing/sandbox/create',{plan_code:'starter'})}>Generate Starter test checkout</button>
-     <button type="button" className="btn btn-secondary" disabled={sandboxBusy} onClick={()=>sandboxAction('/api/billing/sandbox/create',{plan_code:'pro'})}>Generate Pro test checkout</button>
+     <button type="button" className="btn btn-secondary" disabled={sandboxBusy} onClick={()=>sandboxAction('/api/billing/sandbox/create',{plan_code:'starter'})}>{sandboxBusy?'Connecting…':'Generate Starter test checkout'}</button>
+     <button type="button" className="btn btn-secondary" disabled={sandboxBusy} onClick={()=>sandboxAction('/api/billing/sandbox/create',{plan_code:'pro'})}>{sandboxBusy?'Connecting…':'Generate Pro test checkout'}</button>
      {details.subscription&&<button type="button" className="btn btn-secondary" disabled={sandboxBusy}
       onClick={()=>sandboxAction('/api/billing/sandbox/cancel')}>Request test cancellation</button>}
     </div>
+    {sandboxMessage&&<p className="small" role="status" aria-live="polite">{sandboxMessage}</p>}
     {sandboxUrl&&<a className="btn btn-secondary" href={sandboxUrl} target="_blank" rel="noopener noreferrer">Open hosted test checkout</a>}
    </div>}
    <p className="small muted subscription-footnote"><ShieldCheck size={15}/> No payment is being collected. Paid tiers are proposals, not purchase offers. External Make and Google limits still apply; schedules are best-effort.</p>
