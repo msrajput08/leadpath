@@ -78,6 +78,11 @@ Assume **every user has one active, verified Free monitor**, no premium users, e
 Current incremental **fixed** infrastructure expense is $0/month for the untouched free deployment (assuming existing vendor free allowances). The working code is **not** able to satisfy these populations at the advertised cadence. Actual cost cannot be assigned without D1 row-metrics, CPU profiling, batch benchmarks, response volumes, retention bytes, retries, traffic, user mix, provider notification fees, and Make credit consumption. Under paid infrastructure the recurring baseline starts at the published $5/month Workers minimum; the total may be materially higher. Subscription fees are transaction-variable and only start after approved checkout.
 
 
+
+### One-command isolated staging provision (Windows / macOS / Linux)
+
+With the feature branch checked out and dependencies installed, run `npm run staging:setup` from the repository root. This creates or reuses the exact `leadpath-staging-db` D1 database, derives its UUID automatically, generates an ignored `wrangler.staging.jsonc` containing **only** staging bindings, disables staging cron schedules, applies migrations to **only** the staging D1 and deploys the **leadpath-staging** Worker. The program verifies production config names without changing `wrangler.jsonc`, `leadpath-db` or the production Worker. Cloudflare login may be requested. Staging Razorpay secrets, test plan IDs, SMTP/auth secrets and provider callback configuration are separate, later steps; checkout remains disabled by default.
+
 ## Razorpay TEST-mode checkout foundation (separate from paid launch)
 
 A sandbox-only checkout flow now lives behind **RAZORPAY_SANDBOX_ENABLED=true** plus `RAZORPAY_TEST_KEY_ID`, `RAZORPAY_TEST_KEY_SECRET`, `RAZORPAY_TEST_STARTER_PLAN_ID` and `RAZORPAY_TEST_PRO_PLAN_ID`. The server rejects keys that do not start with `rzp_test_`. **No live Razorpay key is used by these endpoints**, and these flags are off by default.
