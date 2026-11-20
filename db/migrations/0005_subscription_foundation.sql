@@ -4,7 +4,8 @@
 CREATE TABLE IF NOT EXISTS subscription_plans (
  code TEXT PRIMARY KEY,
  display_name TEXT NOT NULL,
- price_usd_cents INTEGER NOT NULL CHECK(price_usd_cents >= 0),
+ currency TEXT NOT NULL DEFAULT 'INR' CHECK(length(currency)=3),
+ price_minor_units INTEGER NOT NULL CHECK(price_minor_units >= 0),
  monitor_limit INTEGER NOT NULL CHECK(monitor_limit BETWEEN 1 AND 25),
  interval_seconds INTEGER NOT NULL CHECK(interval_seconds IN (900,3600,21600)),
  manual_runs_per_day INTEGER NOT NULL CHECK(manual_runs_per_day BETWEEN 1 AND 20),
@@ -12,10 +13,12 @@ CREATE TABLE IF NOT EXISTS subscription_plans (
  alert_level TEXT NOT NULL CHECK(alert_level IN ('existing','enhanced','advanced')),
  available_for_purchase INTEGER NOT NULL DEFAULT 0 CHECK(available_for_purchase IN (0,1))
 );
-INSERT OR IGNORE INTO subscription_plans VALUES
- ('free','Free',0,1,21600,3,90,'existing',0),
- ('starter','Starter',900,5,3600,10,90,'existing',0),
- ('pro','Pro',2900,25,900,20,90,'existing',0);
+-- Amounts are INR minor units (paise); commercial prices are provisional, not public offers.
+INSERT OR IGNORE INTO subscription_plans
+ (code,display_name,currency,price_minor_units,monitor_limit,interval_seconds,manual_runs_per_day,history_days,alert_level,available_for_purchase) VALUES
+ ('free','Free','INR',0,1,21600,3,90,'existing',0),
+ ('starter','Starter','INR',79900,5,3600,10,90,'existing',0),
+ ('pro','Pro','INR',249900,25,900,20,90,'existing',0);
 CREATE TABLE IF NOT EXISTS user_subscriptions (
  id TEXT PRIMARY KEY,
  user_id TEXT NOT NULL REFERENCES users(id) ON DELETE CASCADE,
