@@ -103,6 +103,14 @@ test('Free is fail-closed, verified webhook alone does not activate payments, ex
   // Disabling the operational gate always returns Free, regardless of DB state.
   await webhook(env,'evt_reactivate',eventPayload('subscription.activated',subId,activate.created_at+3));
   assert.equal((await getEntitlements({...env,PAID_ENTITLEMENTS_ENABLED:'false'},a.userId)).code,'free');
+  const endOfCycle=eventPayload('subscription.cancelled',subId,activate.created_at+4);
+  endOfCycle.payload.subscription.entity.cancel_at_cycle_end=1;
+  await webhook(env,'evt_end_cycle',endOfCycle);
+  assert.equal((await getEntitlements(env,a.userId)).code,'starter','paid-through cancellation retains access until period end');
+  assert.equal((await DB.prepare('SELECT cancel_at_period_end FROM user_subscriptions WHERE user_id=?').bind(a.userId).first()).cancel_at_period_end,1);
+  await webhook(env,'evt_halted',eventPayload('subscription.halted',subId,activate.created_at+5));
+  assert.equal((await getEntitlements(env,a.userId)).code,'free','failed collection revokes paid access');
+  await webhook(env,'evt_final_active',eventPayload('subscription.activated',subId,activate.created_at+6));
   await DB.prepare('UPDATE user_subscriptions SET current_period_end=? WHERE user_id=?').bind(t-1,a.userId).run();
   assert.equal((await getEntitlements(env,a.userId)).code,'free','expired subscription cannot grant access');
  }finally{DB.sql.close();}
