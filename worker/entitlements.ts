@@ -1,4 +1,5 @@
 import type { Env } from './types.js';
+import {liveCheckoutReady} from './razorpay-live.js';
 
 export type PlanCode = 'free' | 'starter' | 'pro';
 export interface Entitlements {
@@ -34,8 +35,9 @@ export async function getEntitlements(env:Env,userId:string):Promise<Entitlement
  JOIN subscription_plans p ON p.code=s.plan_code
  WHERE s.user_id=? AND s.status='active' AND s.current_period_end>?
  AND p.code IN ('starter','pro')
+ AND (s.billing_mode='live' OR (?=1 AND s.billing_mode='test'))
  ORDER BY s.current_period_end DESC LIMIT 1`)
- .bind(userId,Date.now()).first<PlanRow>();
+ .bind(userId,Date.now(),env.ALLOW_TEST_BILLING_ENTITLEMENTS==='true'?1:0).first<PlanRow>();
  return mapPlan(paid||free);
 }
 
@@ -62,17 +64,18 @@ export async function billingOverview(env:Env,userId:string) {
   env.DB.prepare('SELECT scheduled_checks,manual_checks FROM monthly_usage WHERE user_id=? AND period_utc=?')
    .bind(userId,new Date().toISOString().slice(0,7)).first<{scheduled_checks:number;manual_checks:number}>(),
   env.DB.prepare('SELECT COUNT(*) AS total FROM monitors WHERE user_id=?').bind(userId).first<{total:number}>(),
-  env.DB.prepare(`SELECT s.plan_code,s.status,s.current_period_end,s.cancel_at_period_end
+  env.DB.prepare(`SELECT s.plan_code,s.status,s.current_period_end,s.cancel_at_period_end,s.billing_mode
     FROM user_subscriptions s WHERE s.user_id=? ORDER BY s.updated_at DESC LIMIT 1`)
-    .bind(userId).first<{plan_code:PlanCode;status:string;current_period_end:number|null;cancel_at_period_end:number}>()
+    .bind(userId).first<{plan_code:PlanCode;status:string;billing_mode:string;current_period_end:number|null;cancel_at_period_end:number}>()
  ]);
+ const liveEnabled=liveCheckoutReady(env);
  return {current,plans:plans.results.map(mapPlan).map(p=>({
-   ...p,available_for_purchase:false, // no checkout implemented or approved
-   operationally_available:p.code==='free'
+   ...p,available_for_purchase:liveEnabled&&p.code!=='free',
+   operationally_available:p.code==='free'||liveEnabled
   })),monitor_count:count?.total||0,
   usage:{scheduled_checks:usage?.scheduled_checks||0,manual_checks:usage?.manual_checks||0},
   subscription:subscription?{plan_code:subscription.plan_code,status:subscription.status,
-   current_period_end:subscription.current_period_end,cancel_at_period_end:!!subscription.cancel_at_period_end}:null,
-  checkout_enabled:false,sandbox_checkout_enabled:env.RAZORPAY_SANDBOX_ENABLED==='true'&&!!env.RAZORPAY_TEST_KEY_ID?.startsWith('rzp_test_')&&!!env.RAZORPAY_TEST_KEY_SECRET&&!!env.RAZORPAY_TEST_STARTER_PLAN_ID&&!!env.RAZORPAY_TEST_PRO_PLAN_ID,
+   current_period_end:subscription.current_period_end,cancel_at_period_end:!!subscription.cancel_at_period_end,billing_mode:subscription.billing_mode}:null,
+  checkout_enabled:liveEnabled,sandbox_checkout_enabled:env.RAZORPAY_SANDBOX_ENABLED==='true'&&!!env.RAZORPAY_TEST_KEY_ID?.startsWith('rzp_test_')&&!!env.RAZORPAY_TEST_KEY_SECRET&&!!env.RAZORPAY_TEST_STARTER_PLAN_ID&&!!env.RAZORPAY_TEST_PRO_PLAN_ID,
   paid_features_enabled:paidEntitlementsEnabled(env)};
 }
