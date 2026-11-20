@@ -81,3 +81,8 @@
 @media(max-width:850px){.auth-frame{grid-template-columns:1fr;max-width:590px}.auth-story{padding:22px 31px;min-height:0}.auth-story-copy,.auth-story-foot{display:none}.auth-form-side{padding:27px 32px 32px}.auth-form-inner{max-width:100%;padding:35px 0}.auth-scene{padding:28px 17px}}
 @media(max-width:480px){.auth-scene{padding:15px 10px}.auth-frame{border-radius:16px}.auth-story{padding:18px 22px}.auth-form-side{padding:22px 21px 28px}.auth-form-inner{padding:28px 0}.auth-form-inner h1{font-size:1.84rem}.auth-social{gap:8px}}
 @media(prefers-reduced-motion:reduce){.auth-frame *{animation:none!important;transition:none!important}}
+
+/* Clear email-delivery guidance on the signup / recovery confirmation screen. */
+.auth-result .auth-spam-note{display:block;width:100%;margin:7px 0 2px;padding:12px 14px;border-radius:10px;border:1px solid rgba(164,231,189,.25);background:rgba(164,231,189,.07);line-height:1.65;color:#c4d8cf}
+.auth-spam-note svg{display:inline-block;vertical-align:-3px;margin-right:5px}
+.auth-result .auth-spam-note strong{color:#e5ffec;font-weight:750}
