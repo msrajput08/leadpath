@@ -69,13 +69,23 @@ export async function billingOverview(env:Env,userId:string) {
     .bind(userId).first<{plan_code:PlanCode;status:string;billing_mode:string;current_period_end:number|null;cancel_at_period_end:number}>()
  ]);
  const liveEnabled=liveCheckoutReady(env);
+ // Avoid advertising an exhausted single-customer pilot. Fail closed when
+ // the slot table is unavailable; existing subscribers can still cancel/sync.
+ let liveSpace=false;
+ if(liveEnabled){
+  try {
+   const slots=await env.DB.prepare('SELECT COUNT(*) AS total FROM live_billing_slots').first<{total:number}>();
+   liveSpace=(slots?.total??Infinity)<Number(env.LIVE_MAX_PAID_ACCOUNTS);
+  } catch { liveSpace=false; }
+ }
+ const liveCanEnroll=liveEnabled&&liveSpace;
  return {current,plans:plans.results.map(mapPlan).map(p=>({
-   ...p,available_for_purchase:liveEnabled&&p.code==='starter',
-   operationally_available:p.code==='free'||(liveEnabled&&p.code==='starter')
+   ...p,available_for_purchase:liveCanEnroll&&p.code==='starter',
+   operationally_available:p.code==='free'||(liveCanEnroll&&p.code==='starter')
   })),monitor_count:count?.total||0,
   usage:{scheduled_checks:usage?.scheduled_checks||0,manual_checks:usage?.manual_checks||0},
   subscription:subscription?{plan_code:subscription.plan_code,status:subscription.status,
    current_period_end:subscription.current_period_end,cancel_at_period_end:!!subscription.cancel_at_period_end,billing_mode:subscription.billing_mode}:null,
-  checkout_enabled:liveEnabled,live_pilot_plan:liveEnabled?'starter':null,sandbox_checkout_enabled:env.RAZORPAY_SANDBOX_ENABLED==='true'&&!!env.RAZORPAY_TEST_KEY_ID?.startsWith('rzp_test_')&&!!env.RAZORPAY_TEST_KEY_SECRET&&!!env.RAZORPAY_TEST_STARTER_PLAN_ID&&!!env.RAZORPAY_TEST_PRO_PLAN_ID,
+  checkout_enabled:liveCanEnroll,live_pilot_plan:liveEnabled?'starter':null,sandbox_checkout_enabled:env.RAZORPAY_SANDBOX_ENABLED==='true'&&!!env.RAZORPAY_TEST_KEY_ID?.startsWith('rzp_test_')&&!!env.RAZORPAY_TEST_KEY_SECRET&&!!env.RAZORPAY_TEST_STARTER_PLAN_ID&&!!env.RAZORPAY_TEST_PRO_PLAN_ID,
   paid_features_enabled:paidEntitlementsEnabled(env)};
 }
