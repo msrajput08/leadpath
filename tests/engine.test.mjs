@@ -9,6 +9,8 @@ function makeDb(){
  const sql=new DatabaseSync(':memory:');sql.exec(fs.readFileSync(new URL('../db/migrations/0001_init.sql',import.meta.url),'utf8'));
  sql.exec(fs.readFileSync(new URL('../db/migrations/0002_webhook_ownership.sql',import.meta.url),'utf8'));
  sql.exec(fs.readFileSync(new URL('../db/migrations/0005_subscription_foundation.sql',import.meta.url),'utf8'));
+ sql.exec(fs.readFileSync(new URL('../db/migrations/0006_test_checkout_locks.sql',import.meta.url),'utf8'));
+ sql.exec(fs.readFileSync(new URL('../db/migrations/0007_live_billing_mode.sql',import.meta.url),'utf8'));
  const db={
   prepare(s){const x={sql:s,args:[],bind(...v){this.args=v;return this;},async first(){return sql.prepare(this.sql).get(...this.args)||null;},async all(){return {results:sql.prepare(this.sql).all(...this.args),success:true};},async run(){const r=sql.prepare(this.sql).run(...this.args);return {success:true,meta:{changes:Number(r.changes)}};}};return x;},
   async batch(statements){sql.exec('BEGIN');try{const out=[];for(const stmt of statements)out.push(await stmt.run());sql.exec('COMMIT');return out;}catch(e){sql.exec('ROLLBACK');throw e;}},
