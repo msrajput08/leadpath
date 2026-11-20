@@ -37,11 +37,41 @@ test('premium signup can send verification and login keeps OAuth providers',asyn
  await page.getByLabel('Confirm password').fill('safe-password-example-123');
  await page.getByRole('button',{name:/Create free account/i}).click();
  await expect(page.getByRole('heading',{name:/Check your inbox/i})).toBeVisible();
+ await expect(page.getByText(/Check your Spam, Junk or Promotions folder too/i)).toBeVisible();
  await page.goto('/login');
  await expect(page.getByRole('heading',{name:/Welcome back/i})).toBeVisible();
  await expect(page.getByRole('link',{name:/Google/i})).toBeVisible();
  await expect(page.getByRole('link',{name:/GitHub/i})).toBeVisible();
  await expect(page.getByRole('link',{name:/Forgot password/i})).toBeVisible();
+});
+
+test('confirmation email link verifies automatically then shows login, without requiring a second verification button',async({page})=>{
+ const verificationToken='a'.repeat(64);
+ let verificationCalls=0;
+ await page.route('**/api/public/status',route=>route.fulfill({
+  status:200,contentType:'application/json',
+  body:JSON.stringify({google_auth_configured:true,github_auth_configured:true,password_auth_configured:true})
+ }));
+ await page.route('**/auth/password/verify',route=>{
+  verificationCalls++;
+  expect(route.request().postDataJSON()).toEqual({token:verificationToken});
+  return route.fulfill({status:200,contentType:'application/json',body:JSON.stringify({ok:true})});
+ });
+ await page.goto('/verify-email?token_hash='+verificationToken);
+ await expect(page.getByRole('heading',{name:/Email verified/i})).toBeVisible();
+ await expect(page.getByRole('link',{name:/Continue to login/i})).toBeVisible();
+ await expect(page.getByRole('button',{name:/Verify email/i})).toHaveCount(0);
+ await expect(page).toHaveURL(/\/verify-email$/);
+ expect(verificationCalls).toBe(1);
+ await page.getByRole('link',{name:/Continue to login/i}).click();
+ await expect(page).toHaveURL(/\/login$/);
+ await expect(page.getByRole('heading',{name:/Welcome back/i})).toBeVisible();
+});
+test('invalid or missing confirmation token never offers a redundant verification button',async({page})=>{
+ await page.goto('/verify-email');
+ await expect(page.getByText(/verification link is missing its secure token/i)).toBeVisible();
+ await expect(page.getByRole('link',{name:/Request a fresh link/i})).toBeVisible();
+ await expect(page.getByRole('button',{name:/Verify email/i})).toHaveCount(0);
 });
 test('password reset form checks matching passwords without sending malformed requests',async({page})=>{
  await page.route('**/api/public/status',route=>route.fulfill({
