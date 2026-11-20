@@ -13,7 +13,8 @@
     "typecheck:worker": "tsc --project tsconfig.worker.json --noEmit",
     "test:build": "tsc --project tsconfig.worker.json --noEmit false --outDir .test-build && node scripts/copy-test-security.mjs",
     "test:vitest": "vitest run tests/validators.test.ts",
-    "test:e2e": "playwright test"
+    "test:e2e": "playwright test",
+    "staging:setup": "node scripts/staging-setup.mjs"
   },
   "dependencies": {
     "react": "^19.2.0",
