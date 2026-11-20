@@ -112,7 +112,12 @@ export async function razorpayWebhook(req:Request,env:Env,mode:'test'|'live'='te
    AND EXISTS (SELECT 1 FROM payment_events WHERE provider=? AND event_id=? AND body_sha256=?)`)
     .bind(update.status||'pending',update.periodStart,update.periodEnd,update.cancelAtPeriodEnd?1:0,
       update.createdAt,time,update.provider,update.subscriptionId,mode,update.createdAt,
-      update.provider,scopedEventId,fingerprint)]:[])
+      update.provider,scopedEventId,fingerprint)]:[]),
+  ...(mode==='live'&&update.subscriptionId&&(update.status==='cancelled'||update.status==='expired')?
+   [env.DB.prepare(`DELETE FROM live_billing_slots WHERE provider_subscription_id=?
+    AND EXISTS (SELECT 1 FROM user_subscriptions WHERE provider_subscription_id=?
+     AND billing_mode='live' AND status IN ('cancelled','expired'))`)
+    .bind(update.subscriptionId,update.subscriptionId)]:[])
  ];
  await env.DB.batch(batch);
  return json({ok:true});
