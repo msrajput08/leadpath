@@ -39,6 +39,16 @@ export interface Env {
  RAZORPAY_TEST_KEY_SECRET?: string;
  RAZORPAY_TEST_STARTER_PLAN_ID?: string;
  RAZORPAY_TEST_PRO_PLAN_ID?: string;
+ LIVE_BILLING_ENABLED?: string;
+ LIVE_BILLING_WEBHOOKS_ENABLED?: string;
+ RAZORPAY_LIVE_KEY_ID?: string;
+ RAZORPAY_LIVE_KEY_SECRET?: string;
+ RAZORPAY_LIVE_STARTER_PLAN_ID?: string;
+ RAZORPAY_LIVE_PRO_PLAN_ID?: string;
+ RAZORPAY_LIVE_WEBHOOK_SECRET?: string;
+ LIVE_CAPACITY_REVIEWED?: string;
+ LIVE_MAX_PAID_ACCOUNTS?: string;
+ ALLOW_TEST_BILLING_ENTITLEMENTS?: string;
  RATE_LIMITER?: {limit(input:{key:string}):Promise<{success:boolean}>};
 }
 export interface Monitor {
