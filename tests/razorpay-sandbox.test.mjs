@@ -7,7 +7,7 @@ import {sha256,newRandomString} from '../worker/security.mjs';
 
 function db(){
  const sql=new DatabaseSync(':memory:');
- for(const p of ['0001_init.sql','0002_webhook_ownership.sql','0005_subscription_foundation.sql','0006_test_checkout_locks.sql'])
+ for(const p of ['0001_init.sql','0002_webhook_ownership.sql','0005_subscription_foundation.sql','0006_test_checkout_locks.sql','0007_live_billing_mode.sql'])
   sql.exec(fs.readFileSync(new URL('../db/migrations/'+p,import.meta.url),'utf8'));
  return {sql,prepare(query){return {query,args:[],bind(...args){this.args=args;return this;},
  async first(){return sql.prepare(this.query).get(...this.args)||null;},
