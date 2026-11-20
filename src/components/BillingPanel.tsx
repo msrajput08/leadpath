@@ -4,7 +4,7 @@ type Plan={code:string;display_name:string;currency:string;price_minor_units:num
 const formatPrice=(plan:Plan)=>new Intl.NumberFormat('en-IN',{style:'currency',currency:plan.currency,maximumFractionDigits:0}).format(plan.price_minor_units/100);
 type Details={current:Plan;plans:Plan[];monitor_count:number;usage:{manual_checks:number;scheduled_checks:number};
  subscription:null|{status:string;plan_code:string;billing_mode?:string;current_period_end:number|null;cancel_at_period_end:boolean};
- checkout_enabled:boolean;sandbox_checkout_enabled?:boolean};
+ checkout_enabled:boolean;live_pilot_plan?:string|null;sandbox_checkout_enabled?:boolean};
 export default function BillingPanel({compact=false,csrfToken}:{compact?:boolean;csrfToken?:string}){
  const [details,setDetails]=useState<Details|null>(null);
  const [message,setMessage]=useState('');
@@ -71,18 +71,18 @@ export default function BillingPanel({compact=false,csrfToken}:{compact?:boolean
     {details.subscription.cancel_at_period_end?' Cancellation scheduled.':''}
     {details.subscription.billing_mode==='live'?' Use the controls below to refresh payment status or cancel future renewals.':' Sandbox authorization does not activate paid monitoring.'}</p>}
    {!compact&&<div className="subscription-comparison">{details.plans.map(p=><div className="subscription-tier" key={p.code}>
-    <span className="small muted">{p.code==='free'?'AVAILABLE NOW':details.checkout_enabled?'LIMITED PAID PILOT · INDIA ONLY':'PROPOSED · NOT FOR SALE'}</span>
+    <span className="small muted">{p.code==='free'?'AVAILABLE NOW':details.checkout_enabled&&p.code==='starter'?'LIMITED PAID PILOT · INDIA ONLY':'PROPOSED · NOT FOR SALE'}</span>
     <h3>{p.display_name}</h3><strong className="subscription-price">{formatPrice(p)}<small> /month</small></strong>
     <p className="small">{p.monitor_limit} monitor{p.monitor_limit===1?'':'s'} · target every {p.interval_seconds===21600?'6 hours':p.interval_seconds===3600?'hour':'15 minutes'}</p>
-    <span className="small muted">{p.code==='free'?<><CheckCircle2 size={14}/> Current service</>:<><Clock3 size={14}/> {details.checkout_enabled?'Paid monitoring · best-effort schedules':'Frequency and billing pending validation'}</>}</span>
+    <span className="small muted">{p.code==='free'?<><CheckCircle2 size={14}/> Current service</>:<><Clock3 size={14}/> {details.checkout_enabled&&p.code==='starter'?'Paid monitoring · best-effort schedules':'Frequency and billing pending validation'}</>}</span>
    </div>)}</div>}
    {(details.checkout_enabled||details.subscription?.billing_mode==='live')&&csrfToken&&<div className="sandbox-controls">
     <h3>{details.subscription?.billing_mode==='live'?'Manage your live subscription':'Choose your monthly subscription'}</h3>
-    {details.checkout_enabled&&<p className="small">Razorpay Live Mode. You will authorize real monthly recurring payments (up to 12 cycles). Review the price and payment terms on Razorpay before confirming.</p>}
+    {details.checkout_enabled&&<p className="small">Starter is available to one approved Indian pilot customer only. Razorpay Live Mode authorizes real monthly recurring payments (up to 12 cycles). Review the price and payment terms before confirming. Pro is not available for purchase yet.</p>}
     <div className="row-inline wrap">
      {details.checkout_enabled&&<button type="button" className="btn btn-primary" disabled={liveBusy||(details.subscription?.billing_mode==='live'&&['pending','active','past_due'].includes(details.subscription.status))}
       onClick={()=>liveAction('/api/billing/live/create',{plan_code:'starter'})}>Subscribe to Starter · ₹799/mo</button>}
-     {details.checkout_enabled&&<button type="button" className="btn btn-secondary" disabled={liveBusy||(details.subscription?.billing_mode==='live'&&['pending','active','past_due'].includes(details.subscription.status))}
+     {details.checkout_enabled&&details.live_pilot_plan!=='starter'&&<button type="button" className="btn btn-secondary" disabled={liveBusy||(details.subscription?.billing_mode==='live'&&['pending','active','past_due'].includes(details.subscription.status))}
       onClick={()=>liveAction('/api/billing/live/create',{plan_code:'pro'})}>Subscribe to Pro · ₹2,499/mo</button>}
      {details.subscription?.billing_mode==='live'&&<>
       <button type="button" className="btn btn-secondary" disabled={liveBusy}
