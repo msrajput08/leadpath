@@ -8,6 +8,7 @@ import {sha256,newRandomString,encryptSecret} from '../worker/security.mjs';
 function makeDb(){
  const sql=new DatabaseSync(':memory:');sql.exec(fs.readFileSync(new URL('../db/migrations/0001_init.sql',import.meta.url),'utf8'));
  sql.exec(fs.readFileSync(new URL('../db/migrations/0002_webhook_ownership.sql',import.meta.url),'utf8'));
+ sql.exec(fs.readFileSync(new URL('../db/migrations/0005_subscription_foundation.sql',import.meta.url),'utf8'));
  const db={
   prepare(s){const x={sql:s,args:[],bind(...v){this.args=v;return this;},async first(){return sql.prepare(this.sql).get(...this.args)||null;},async all(){return {results:sql.prepare(this.sql).all(...this.args),success:true};},async run(){const r=sql.prepare(this.sql).run(...this.args);return {success:true,meta:{changes:Number(r.changes)}};}};return x;},
   async batch(statements){sql.exec('BEGIN');try{const out=[];for(const stmt of statements)out.push(await stmt.run());sql.exec('COMMIT');return out;}catch(e){sql.exec('ROLLBACK');throw e;}},
@@ -152,6 +153,11 @@ test('scheduler claim is idempotent; upstream errors are not marked confirmed; p
   await sweepTimedOut(env,ctx);
   assert.equal((await DB.prepare('SELECT state FROM runs WHERE id=?').bind(pausedExpiredId).first()).state,'unconfirmed');
   assert.equal((await DB.prepare('SELECT health FROM monitors WHERE id=?').bind(mid).first()).health,'paused','late timeout must not resume a paused monitor');
-  await assert.rejects(DB.prepare("INSERT INTO monitors (id,user_id,name,webhook_ciphertext,secret_hash,state,health,interval_seconds,next_due,created_at,updated_at) VALUES(?,?,?,?,?,'active','configuration_required',21600,?,?,?)").bind(crypto.randomUUID(),uid,'Second','cipher','hash',t,t,t).run(),/UNIQUE/);
+  // Migration removes the old physical single-monitor index; central entitlements
+  // must still prevent Free users from exercising additional monitors.
+  const extraId=crypto.randomUUID();
+  await DB.prepare("INSERT INTO monitors (id,user_id,name,webhook_ciphertext,secret_hash,state,health,interval_seconds,next_due,created_at,updated_at) VALUES(?,?,?,?,?,'active','configuration_required',21600,?,?,?)").bind(extraId,uid,'Second','cipher','hash',t,t+1,t+1).run();
+  const denied=await runMonitor(env,await DB.prepare('SELECT * FROM monitors WHERE id=?').bind(extraId).first(),'manual',ctx);
+  assert.equal(denied.accepted,false,'Free over-limit monitor cannot send a manual check');
  }finally{globalThis.fetch=originalFetch;DB.sql.close();}
 });
