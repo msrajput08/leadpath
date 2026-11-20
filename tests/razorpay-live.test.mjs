@@ -117,6 +117,8 @@ test('verified LIVE payment activates only the matching live record, and owner c
   assert.equal(verified.status,200);
   assert.equal((await verified.json()).paid_access,true);
   assert.equal((await getEntitlements(env,who.userId)).code,'starter');
+  assert.equal((await send(env,who,'/api/account','DELETE',{})).status,409,
+   'account deletion cannot silently leave a Razorpay mandate charging the user');
   const bill=await send(env,who,'/api/billing');
   assert.equal((await bill.json()).checkout_enabled,true);
   const cancel=await send(env,who,'/api/billing/live/cancel','POST',{});
