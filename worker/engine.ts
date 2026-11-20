@@ -138,12 +138,24 @@ export async function scheduled(env: Env, ctx: SideEffect): Promise<void> {
  // Default three to preserve free-tier costs; up to 40 only after a separate paid capacity review.
  await sweepTimedOut(env,ctx);
  const batchLimit=Math.max(1,Math.min(40,Number(env.SCHEDULE_BATCH_LIMIT)||3));
- // Free-only deployments must not let dormant over-quota monitors consume each tick.
- const freeGuard=paidEntitlementsEnabled(env)?'':`AND NOT EXISTS (
+ // Exclude over-quota monitors from the SQL batch BEFORE limiting, even after enabling
+ // paid plans. Otherwise dormant downgraded monitors may starve paying and Free users.
+ const paid=paidEntitlementsEnabled(env),time=now();
+ const freeGuard=`AND NOT EXISTS (
    SELECT 1 FROM monitors older WHERE older.user_id=monitors.user_id AND
    (older.created_at<monitors.created_at OR (older.created_at=monitors.created_at AND older.id<monitors.id)))`;
- const due=await env.DB.prepare(`SELECT * FROM monitors WHERE state='active' AND verified_at IS NOT NULL AND next_due<=? AND (lock_until IS NULL OR lock_until<?) ${freeGuard} ORDER BY next_due LIMIT ?`)
-  .bind(now(),now(),batchLimit).all<Monitor>();
+ const entitledGuard=`AND (SELECT COUNT(*) FROM monitors older WHERE older.user_id=monitors.user_id AND
+   (older.created_at<monitors.created_at OR (older.created_at=monitors.created_at AND older.id<=monitors.id)))
+   <= COALESCE((
+     SELECT p.monitor_limit FROM user_subscriptions s JOIN subscription_plans p ON p.code=s.plan_code
+     WHERE s.user_id=monitors.user_id AND s.status='active' AND s.current_period_end>?
+     AND (s.billing_mode='live' OR (s.billing_mode='test' AND ?=1))
+     ORDER BY s.current_period_end DESC LIMIT 1
+   ),1)`;
+ const due=await env.DB.prepare(`SELECT * FROM monitors WHERE state='active' AND verified_at IS NOT NULL AND next_due<=? AND (lock_until IS NULL OR lock_until<?)
+   ${paid?entitledGuard:freeGuard} ORDER BY next_due LIMIT ?`)
+  .bind(...(paid?[time,time,time,env.ALLOW_TEST_BILLING_ENTITLEMENTS==='true'?1:0,batchLimit]:
+    [time,time,batchLimit])).all<Monitor>();
  for (const monitor of due.results) await runMonitor(env,monitor,'scheduled',ctx);
  // Daily cleanup only. Repeating historical DELETE queries every 15 min is costly in D1.
  const time=now(); const utc=new Date(time);
