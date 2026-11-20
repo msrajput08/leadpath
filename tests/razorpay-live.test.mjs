@@ -105,6 +105,9 @@ test('verified LIVE payment activates only the matching live record, and owner c
   assert.equal(record.billing_mode,'live');assert.equal(record.status,'pending');
   assert.equal((await getEntitlements(env,who.userId)).code,'free','payment not yet verified');
   assert.equal((await send(env,who,'/api/billing/live/create','POST',{plan_code:'pro'})).status,409);
+  const second=await account(DB);
+  assert.equal((await send(env,second,'/api/billing/live/create','POST',{plan_code:'starter'})).status,409,
+   'atomic pilot reservations reject a second paying account');
   const baseProof={razorpay_payment_id:'pay_LivePilot01',razorpay_subscription_id:subId};
   const forged=await send(env,who,'/api/billing/live/confirm','POST',{...baseProof,razorpay_signature:'a'.repeat(64)});
   assert.equal(forged.status,401);
@@ -124,6 +127,8 @@ test('verified LIVE payment activates only the matching live record, and owner c
   const lapsed=await send(env,who,'/api/billing/live/sync','POST',{});
   assert.equal((await lapsed.json()).status,'cancelled');
   assert.equal((await getEntitlements(env,who.userId)).code,'free','expired paid access revoked');
+  assert.equal((await DB.prepare('SELECT COUNT(*) c FROM live_billing_slots').first()).c,0,
+   'provider-confirmed expiry releases limited pilot capacity');
   assert.ok(requests>=5);
  }finally{globalThis.fetch=previous;DB.sql.close();}
 });
@@ -151,4 +156,21 @@ test('live and test webhooks cannot cross-grant payment access',async()=>{
   const events=await DB.prepare('SELECT COUNT(*) c FROM payment_events').first();
   assert.equal(events.c,1);
  }finally{globalThis.fetch=original;DB.sql.close();}
+});
+
+test('definitive provider rejection releases slot without creating duplicate recurring mandates',async()=>{
+ const DB=makeDb(),who=await account(DB),env=setupEnv(DB),previous=globalThis.fetch;
+ globalThis.fetch=async(url)=>{
+  if(String(url).includes('/plans/'))
+   return Response.json({id:'plan_StarterLive2026',period:'monthly',interval:1,
+    item:{amount:79900,currency:'INR'}});
+  return new Response('Bad request',{status:400});
+ };
+ try{
+  const response=await send(env,who,'/api/billing/live/create','POST',{plan_code:'starter'});
+  assert.equal(response.status,502);
+  assert.equal((await DB.prepare('SELECT COUNT(*) c FROM live_billing_slots').first()).c,0);
+  assert.equal((await DB.prepare('SELECT COUNT(*) c FROM billing_creation_locks').first()).c,0);
+  assert.equal((await DB.prepare('SELECT COUNT(*) c FROM user_subscriptions').first()).c,0);
+ }finally{globalThis.fetch=previous;DB.sql.close();}
 });
