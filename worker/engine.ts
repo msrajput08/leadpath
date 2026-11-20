@@ -131,13 +131,13 @@ export async function confirmCallback(req: Request, env: Env, monitorId: string,
 }
 
 export async function sweepTimedOut(env: Env, ctx: SideEffect): Promise<void> {
- const expired=await env.DB.prepare("SELECT id,monitor_id FROM runs WHERE state='pending' AND expires_at<? ORDER BY expires_at LIMIT 8").bind(now()).all<{id:string;monitor_id:string}>();
+ const expired=await env.DB.prepare("SELECT id,monitor_id FROM runs WHERE state='pending' AND expires_at<? ORDER BY expires_at LIMIT 32").bind(now()).all<{id:string;monitor_id:string}>();
  for (const run of expired.results) await failRun(env,run.id,run.monitor_id,'unconfirmed','ACK_TIMEOUT',ctx);
 }
 export async function scheduled(env: Env, ctx: SideEffect): Promise<void> {
- // Compact batches to keep daily free-tier D1 queries and cron CPU bounded.
+ // Default three to preserve free-tier costs; up to 40 only after a separate paid capacity review.
  await sweepTimedOut(env,ctx);
- const batchLimit=Math.max(1,Math.min(3,Number(env.SCHEDULE_BATCH_LIMIT)||3));
+ const batchLimit=Math.max(1,Math.min(40,Number(env.SCHEDULE_BATCH_LIMIT)||3));
  // Free-only deployments must not let dormant over-quota monitors consume each tick.
  const freeGuard=paidEntitlementsEnabled(env)?'':`AND NOT EXISTS (
    SELECT 1 FROM monitors older WHERE older.user_id=monitors.user_id AND
