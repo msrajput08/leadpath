@@ -106,7 +106,7 @@ export default function BillingPanel({compact=false,csrfToken}:{compact?:boolean
     {sandboxUrl&&<a className="btn btn-secondary" href={sandboxUrl} target="_blank" rel="noopener noreferrer">Open hosted test checkout</a>}
    </div>}
    <p className="small muted subscription-footnote"><ShieldCheck size={15}/>
-    {details.checkout_enabled?'Real recurring payments are processed by Razorpay only after your authorization. Paid capacity is limited during launch.':'No payment is being collected. Paid tiers are proposals, not purchase offers.'}
+    {details.checkout_enabled||details.subscription?.billing_mode==='live'?'Live Razorpay subscriptions are real recurring payments. New enrollments may be paused; cancellation and billing status remain available.':'No payment is being collected. Paid tiers are proposals, not purchase offers.'}
     {' '}External Make and Google limits still apply; monitoring schedules are best-effort.</p>
    {compact&&<a className="btn btn-secondary" href="/account">View subscription details</a>}
   </>}
