@@ -37,7 +37,8 @@ This follow-up implementation delegates password hashing, email verification and
 ## Behavior / account safety
 
 - Signup delegates password hashing and confirmation mail to Supabase Auth. No D1 workspace is created before the user's **verified login**.
-- Email verification requires opening a link then pressing **Verify email**; Supabase validates the expiring single-use token hash.
+- Email verification happens **automatically when the user opens their verification link**; Supabase validates the expiring single-use token hash, then the page shows **Continue to login**. No redundant second verification click.
+- The post-signup/post-reset email confirmation page prominently reminds users to check Spam, Junk and Promotions and mark the mail as Not spam if needed.
 - Login receives a provider-issued token only server-side, checks the provider-verified email and ID, then issues the existing LeadPath session cookie. OAuth identities remain separate even when email text matches.
 - Forgot password sends the generic confirmation message regardless of account existence.
 - Reset verifies Supabase's one-time recovery link and updates the password at Supabase, then invalidates existing LeadPath D1 sessions for that identity.
