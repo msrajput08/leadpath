@@ -57,6 +57,10 @@ test('additive D1 migration keeps original monitor and runs, permits controlled 
   DB.sql.exec(fs.readFileSync(new URL('../db/migrations/0005_subscription_foundation.sql',import.meta.url),'utf8'));
   const saved=await DB.prepare('SELECT schedule_interval_seconds FROM monitors WHERE id=?').bind(mid).first();
   assert.equal(saved.schedule_interval_seconds,21600);
+  const catalog=await DB.prepare('SELECT code,currency,price_minor_units FROM subscription_plans ORDER BY price_minor_units').all();
+  assert.deepEqual(catalog.results.map(p=>[p.code,p.currency,p.price_minor_units]),[
+   ['free','INR',0],['starter','INR',79900],['pro','INR',249900]
+  ],'all proposed amounts stored in integer INR minor units');
   assert.equal((await DB.prepare('SELECT COUNT(*) c FROM runs WHERE monitor_id=?').bind(mid).first()).c,1);
   await DB.prepare("INSERT INTO monitors(id,user_id,name,webhook_ciphertext,secret_hash,state,health,interval_seconds,next_due,created_at,updated_at) VALUES(?,?,?,?,?,'active','configuration_required',21600,?,?,?)").bind(crypto.randomUUID(),uid,'Second','cipher','hash',t,t+1,t+1).run();
   assert.equal((await DB.prepare('SELECT COUNT(*) c FROM monitors WHERE user_id=?').bind(uid).first()).c,2);
@@ -94,7 +98,13 @@ test('Free is fail-closed, verified webhook alone does not activate payments, ex
   assert.equal((await DB.prepare('SELECT COUNT(*) c FROM monitors WHERE user_id=?').bind(a.userId).first()).c,5,'downgrade keeps existing data');
   const latest=await DB.prepare('SELECT id,user_id,created_at FROM monitors WHERE user_id=? ORDER BY created_at DESC,id DESC LIMIT 1').bind(a.userId).first();
   assert.equal(await withinMonitorLimit(env,latest,1),false);
-  assert.equal((await handleApi(request('/api/billing','GET',undefined,a),env,ctx)).status,200);
+  const billing=await handleApi(request('/api/billing','GET',undefined,a),env,ctx);
+  assert.equal(billing.status,200);
+  const billingData=await billing.json();
+  assert.equal(billingData.current.currency,'INR');
+  assert.equal(billingData.current.price_minor_units,0);
+  assert.equal(billingData.checkout_enabled,false);
+  assert.deepEqual(billingData.plans.map(p=>p.price_minor_units),[0,79900,249900]);
   assert.equal((await handleApi(request('/api/billing','GET',undefined),env,ctx)).status,401,'billing overview requires authentication');
   assert.equal((await handleApi(request('/api/billing','POST',{plan_code:'pro'},a),env,ctx)).status,404,'browser cannot upgrade its own plan');
   // A correctly signed webhook for an unlinked provider ID must not create a subscription.
