@@ -34,7 +34,7 @@ async function account(DB){
 function setupEnv(DB){
  return {DB,BASE_URL:base,LIVE_BILLING_ENABLED:'true',LIVE_BILLING_WEBHOOKS_ENABLED:'true',
   PAID_ENTITLEMENTS_ENABLED:'true',LIVE_CAPACITY_REVIEWED:'true',LIVE_MAX_PAID_ACCOUNTS:'1',
-  SCHEDULE_BATCH_LIMIT:'30',RAZORPAY_LIVE_KEY_ID:'rzp_live_fake_live_id',
+  SCHEDULE_BATCH_LIMIT:'6',LIVE_PILOT_PLAN:'starter',RAZORPAY_LIVE_KEY_ID:'rzp_live_fake_live_id',
   RAZORPAY_LIVE_KEY_SECRET:'mocked-live-secret-for-HMAC-only',
   RAZORPAY_LIVE_STARTER_PLAN_ID:'plan_StarterLive2026',
   RAZORPAY_LIVE_PRO_PLAN_ID:'plan_ProLive2026',
@@ -58,6 +58,10 @@ test('live checkout refuses keys, feature flags, unreviewed capacity and nonmatc
   assert.equal((await send({...env,RAZORPAY_LIVE_KEY_ID:'rzp_test_forbidden'},who,path,'POST',{plan_code:'starter'})).status,503);
   assert.equal((await send({...env,LIVE_CAPACITY_REVIEWED:'false'},who,path,'POST',{plan_code:'starter'})).status,503);
   assert.equal((await send({...env,SCHEDULE_BATCH_LIMIT:'3'},who,path,'POST',{plan_code:'starter'})).status,503);
+  assert.equal((await send({...env,SCHEDULE_BATCH_LIMIT:'30'},who,path,'POST',{plan_code:'starter'})).status,503);
+  assert.equal((await send({...env,LIVE_PILOT_PLAN:'pro'},who,path,'POST',{plan_code:'starter'})).status,503);
+  assert.equal((await send(env,who,path,'POST',{plan_code:'pro'})).status,403,
+   'Pro checkout is blocked in the initial one-customer Starter pilot');
   assert.equal((await send(env,who,path,'POST',{plan_code:'starter'},'wrong-csrf')).status,403);
   assert.equal((await send(env,who,path,'POST',{plan_code:'free'})).status,400);
   globalThis.fetch=async(_url,options)=>{assert.equal(options.redirect,'manual');
@@ -104,7 +108,7 @@ test('verified LIVE payment activates only the matching live record, and owner c
   const record=await DB.prepare('SELECT billing_mode,status FROM user_subscriptions WHERE user_id=?').bind(who.userId).first();
   assert.equal(record.billing_mode,'live');assert.equal(record.status,'pending');
   assert.equal((await getEntitlements(env,who.userId)).code,'free','payment not yet verified');
-  assert.equal((await send(env,who,'/api/billing/live/create','POST',{plan_code:'pro'})).status,409);
+  assert.equal((await send(env,who,'/api/billing/live/create','POST',{plan_code:'pro'})).status,403);
   const second=await account(DB);
   assert.equal((await send(env,second,'/api/billing/live/create','POST',{plan_code:'starter'})).status,409,
    'atomic pilot reservations reject a second paying account');
@@ -120,7 +124,11 @@ test('verified LIVE payment activates only the matching live record, and owner c
   assert.equal((await send(env,who,'/api/account','DELETE',{})).status,409,
    'account deletion cannot silently leave a Razorpay mandate charging the user');
   const bill=await send(env,who,'/api/billing');
-  assert.equal((await bill.json()).checkout_enabled,true);
+  const overview=await bill.json();
+  assert.equal(overview.checkout_enabled,true);
+  assert.equal(overview.live_pilot_plan,'starter');
+  assert.equal(overview.plans.find(p=>p.code==='starter').available_for_purchase,true);
+  assert.equal(overview.plans.find(p=>p.code==='pro').available_for_purchase,false);
   const cancel=await send(env,who,'/api/billing/live/cancel','POST',{});
   assert.equal(cancel.status,200);
   assert.equal((await cancel.json()).cancel_at_period_end,true);
