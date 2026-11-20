@@ -31,6 +31,18 @@ const id=db?.uuid||db?.id;
 if(typeof id!=='string'||!/^[a-f0-9-]{36}$/i.test(id))throw Error('Could not verify production D1 database identity.');
 lookup.d1_databases=[{binding:'DB',database_name:'leadpath-db',database_id:id,
  migrations_dir:'db/migrations'}];
+// A later preflight must not accidentally detach a live Queue binding.
+if(fs.existsSync(generated)){
+ const old=JSON.parse(fs.readFileSync(generated,'utf8'));
+ if(old.name==='leadpath'&&old.d1_databases?.[0]?.database_name==='leadpath-db'&&old.queues){
+  const q=old.queues;
+  if(q.producers?.length!==1||q.producers[0]?.binding!=='MONITOR_QUEUE'||
+     q.producers[0]?.queue!=='leadpath-monitor-jobs'||q.consumers?.length!==1||
+     q.consumers[0]?.queue!=='leadpath-monitor-jobs')
+    throw Error('Unexpected existing production Queue bindings. No config overwritten.');
+  lookup.queues=q;
+ }
+}
 fs.writeFileSync(generated,JSON.stringify(lookup,null,2)+'\n');
 console.log('\nVerified production D1 mapping. Generated ignored wrangler.live.local.jsonc.');
 console.log('No live changes, billing, charges or deployment have occurred.');
