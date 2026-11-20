@@ -47,17 +47,21 @@ export async function sandboxCreateSubscription(env:Env,userId:string,request:Re
   AND status IN ('pending','active','past_due') LIMIT 1`).bind(userId).first();
  if(existing)return fail(409,'Existing subscription must be resolved before starting another.');
  const timestamp=Date.now(),nonce=crypto.randomUUID();
+ const providerPlanId=planCode==='starter'?env.RAZORPAY_TEST_STARTER_PLAN_ID!:env.RAZORPAY_TEST_PRO_PLAN_ID!;
+ // Validate the remote plan BEFORE creating the duplicate-prevention lock.
+ // A wrong ID, rejected GET or price mismatch must not block the next attempt for 30 minutes.
+ let verifiedPlan:GatewayPlan;
+ try {verifiedPlan=await gateway<GatewayPlan>(env,'GET','plans/'+providerPlanId);}
+ catch {return fail(502,'Unable to verify Razorpay test plan. Check Test Mode plan IDs and API keys.');}
+ if(verifiedPlan.id!==providerPlanId||verifiedPlan.period!=='monthly'||verifiedPlan.interval!==1 ||
+    verifiedPlan.item?.currency!=='INR'||verifiedPlan.item.amount!==plan.price_minor_units)
+  return fail(503,'Razorpay test plan does not match LeadPath INR price or monthly interval.');
  const lock=await env.DB.prepare(`INSERT INTO billing_creation_locks(user_id,nonce,locked_until,created_at)
  VALUES(?,?,?,?) ON CONFLICT(user_id) DO UPDATE SET nonce=excluded.nonce,locked_until=excluded.locked_until,
  created_at=excluded.created_at WHERE billing_creation_locks.locked_until<?`)
  .bind(userId,nonce,timestamp+1800000,timestamp,timestamp).run();
- if(!lock.meta.changes)return fail(409,'Subscription setup is already in progress.');
- const providerPlanId=planCode==='starter'?env.RAZORPAY_TEST_STARTER_PLAN_ID!:env.RAZORPAY_TEST_PRO_PLAN_ID!;
+ if(!lock.meta.changes)return fail(409,'Subscription setup is already in progress. Check test subscriptions before retrying.');
  try {
-  const verifiedPlan=await gateway<GatewayPlan>(env,'GET','plans/'+providerPlanId);
-  if(verifiedPlan.id!==providerPlanId||verifiedPlan.period!=='monthly'||verifiedPlan.interval!==1 ||
-     verifiedPlan.item?.currency!=='INR'||verifiedPlan.item.amount!==plan.price_minor_units)
-   return fail(503,'Test plan price or billing interval differs from the approved catalog.');
   // Sandbox-only subscription; provider returns a hosted test-mode authentication link.
   const created=await gateway<GatewaySubscription>(env,'POST','subscriptions',
    {plan_id:providerPlanId,total_count:12,quantity:1,customer_notify:false,
