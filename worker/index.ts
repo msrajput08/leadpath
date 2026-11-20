@@ -6,6 +6,7 @@ import { socialStart, socialCallback } from './social.js';
 import { emailRequest, emailVerify } from './email-auth.js';
 import { passwordSignUp, passwordLogin, passwordVerifyEmail, passwordResend, passwordForgot, passwordReset } from './password-auth.js';
 import { confirmCallback, scheduled } from './engine.js';
+import { razorpayWebhook } from './billing.js';
 
 type Ctx = {waitUntil(promise:Promise<unknown>):void};
 function hardened(res:Response):Response {
@@ -22,6 +23,7 @@ export default {
   const path=new URL(req.url).pathname;
   try {
    if (!env.BASE_URL) return hardened(fail(503,'BASE_URL not configured'));
+   if (path==='/api/billing/webhook/razorpay' && req.method==='POST') return hardened(await razorpayWebhook(req,env));
    // Protect both OAuth providers and public diagnostics before database access.
    if ((((path==='/auth/google/start'||path==='/auth/google/callback'||
            path==='/auth/github/start'||path==='/auth/github/callback'||
