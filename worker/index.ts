@@ -23,7 +23,8 @@ export default {
   const path=new URL(req.url).pathname;
   try {
    if (!env.BASE_URL) return hardened(fail(503,'BASE_URL not configured'));
-   if (path==='/api/billing/webhook/razorpay' && req.method==='POST') return hardened(await razorpayWebhook(req,env));
+   if (path==='/api/billing/webhook/razorpay' && req.method==='POST') return hardened(await razorpayWebhook(req,env,'test'));
+   if (path==='/api/billing/webhook/razorpay-live' && req.method==='POST') return hardened(await razorpayWebhook(req,env,'live'));
    // Protect both OAuth providers and public diagnostics before database access.
    if ((((path==='/auth/google/start'||path==='/auth/google/callback'||
            path==='/auth/github/start'||path==='/auth/github/callback'||
