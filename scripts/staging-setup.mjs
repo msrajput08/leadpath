@@ -31,33 +31,36 @@ function wranglerRun(args, capture = false) {
  return result.stdout || '';
 }
 function databases() {
- const value = JSON.parse(wranglerRun(['d1', 'list', '--json'], true));
+ const value = JSON.parse(wranglerRun(['d1', 'list', '--json', '--config', output], true));
  return Array.isArray(value) ? value : Array.isArray(value.result) ? value.result : [];
 }
+const staging = structuredClone(config);
+staging.name = workerName;
+staging.vars = { ...staging.vars, BASE_URL: workerUrl };
+staging.triggers = { crons: [] }; // Never execute real monitoring cron from staging.
+staging.d1_databases = [];
+if (Array.isArray(staging.ratelimits)) {
+ staging.ratelimits = staging.ratelimits.map(x => ({ ...x, namespace_id: '910247' }));
+}
+delete staging.previews;
+// Wrangler D1 create may edit its config: provide an isolated config from the start.
+fs.writeFileSync(output, JSON.stringify(staging, null, 2) + '\n');
+
 console.log('Checking isolated staging database...');
 let db = databases().find(x => x.name === databaseName);
 if (!db) {
  console.log('Creating ' + databaseName);
- wranglerRun(['d1', 'create', databaseName]);
+ wranglerRun(['d1', 'create', databaseName, '--config', output]);
  db = databases().find(x => x.name === databaseName);
 }
 const dbId = db?.uuid || db?.id;
 if (typeof dbId !== 'string' || !/^[a-f0-9-]{36}$/i.test(dbId))
  throw new Error('Staging database UUID not found. Production was not changed.');
 
-const staging = structuredClone(config);
-staging.name = workerName;
-staging.vars = { ...staging.vars, BASE_URL: workerUrl };
-staging.triggers = { crons: [] }; // No scheduled Make calls from staging.
 staging.d1_databases = [{
  binding: 'DB', database_name: databaseName, database_id: dbId,
  migrations_dir: 'db/migrations'
 }];
-// Dedicated rate-limit namespace to avoid production counter collisions.
-if (Array.isArray(staging.ratelimits)) {
- staging.ratelimits = staging.ratelimits.map(x => ({ ...x, namespace_id: '910247' }));
-}
-delete staging.previews;
 fs.writeFileSync(output, JSON.stringify(staging, null, 2) + '\n');
 console.log('Generated private staging-only config: wrangler.staging.jsonc');
 
