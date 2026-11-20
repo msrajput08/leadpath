@@ -142,7 +142,7 @@ export default function AuthOptions({initialMode='login'}:{initialMode?:Mode}){
       {(mode==='signup'||mode==='reset')&&<p className="auth-hint"><LockKeyhole size={14}/> Use at least 12 characters. Never reuse a password from another site.</p>}
       {mode==='login'&&<div className="auth-forgot"><a href="/forgot-password">Forgot password?</a></div>}
       <button type="submit" className="auth-submit" disabled={busy||!configured||(mode==='reset'&&!token)}>
-       {busy?'Please wait…':mode==='signup'?'Create free account':mode==='login'?'Log in':mode==='forgot'?'Send reset link':'Resend verification link'}
+       {busy?'Please wait…':mode==='signup'?'Create free account':mode==='login'?'Log in':mode==='forgot'?'Send reset link':mode==='resend'?'Resend verification link':'Update password'}
        {!busy&&<ArrowRight size={17}/>}
       </button>
      </form>}
