@@ -76,14 +76,14 @@ export default function BillingPanel({compact=false,csrfToken}:{compact?:boolean
     <p className="small">{p.monitor_limit} monitor{p.monitor_limit===1?'':'s'} · target every {p.interval_seconds===21600?'6 hours':p.interval_seconds===3600?'hour':'15 minutes'}</p>
     <span className="small muted">{p.code==='free'?<><CheckCircle2 size={14}/> Current service</>:<><Clock3 size={14}/> Frequency, alerts and billing pending validation</>}</span>
    </div>)}</div>}
-   {details.checkout_enabled&&csrfToken&&<div className="sandbox-controls">
-    <h3>Choose your monthly subscription</h3>
-    <p className="small">Razorpay Live Mode. You will authorize real monthly recurring payments (up to 12 cycles). Review the price and payment terms on Razorpay before confirming.</p>
+   {(details.checkout_enabled||details.subscription?.billing_mode==='live')&&csrfToken&&<div className="sandbox-controls">
+    <h3>{details.subscription?.billing_mode==='live'?'Manage your live subscription':'Choose your monthly subscription'}</h3>
+    {details.checkout_enabled&&<p className="small">Razorpay Live Mode. You will authorize real monthly recurring payments (up to 12 cycles). Review the price and payment terms on Razorpay before confirming.</p>}
     <div className="row-inline wrap">
-     <button type="button" className="btn btn-primary" disabled={liveBusy||details.subscription?.billing_mode==='live'}
-      onClick={()=>liveAction('/api/billing/live/create',{plan_code:'starter'})}>Subscribe to Starter · ₹799/mo</button>
-     <button type="button" className="btn btn-secondary" disabled={liveBusy||details.subscription?.billing_mode==='live'}
-      onClick={()=>liveAction('/api/billing/live/create',{plan_code:'pro'})}>Subscribe to Pro · ₹2,499/mo</button>
+     {details.checkout_enabled&&<button type="button" className="btn btn-primary" disabled={liveBusy||(details.subscription?.billing_mode==='live'&&['pending','active','past_due'].includes(details.subscription.status))}
+      onClick={()=>liveAction('/api/billing/live/create',{plan_code:'starter'})}>Subscribe to Starter · ₹799/mo</button>}
+     {details.checkout_enabled&&<button type="button" className="btn btn-secondary" disabled={liveBusy||(details.subscription?.billing_mode==='live'&&['pending','active','past_due'].includes(details.subscription.status))}
+      onClick={()=>liveAction('/api/billing/live/create',{plan_code:'pro'})}>Subscribe to Pro · ₹2,499/mo</button>}
      {details.subscription?.billing_mode==='live'&&<>
       <button type="button" className="btn btn-secondary" disabled={liveBusy}
        onClick={()=>liveAction('/api/billing/live/sync')}>Refresh payment status</button>
