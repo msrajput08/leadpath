@@ -1,12 +1,14 @@
 # LeadPath
 
-**Never lose a lead to a broken workflow.** A single-deployment, zero-paid-dependency MVP for monitoring a configured **Make.com webhook → Google Sheets → authenticated callback** flow.
+**Know whether an authorized automation reached its destination.** LeadPath monitors **Make.com webhook → Google Sheets → authenticated callback** using synthetic records.
 
-> **Current verification status:** Source-code implementation with local database/HTTP integration tests. **Not a deployed or production-verified service.** The Google/GitHub OAuth tests use simulated provider responses; a real Make → Sheets scenario and Cloudflare deployment are not yet verified. See `PRODUCTION_READINESS.md` and `VERIFICATION.md` before inviting users.
+**Current deployment:** https://leadpath.monty-08-raj.workers.dev/ (operator-reported live Cloudflare Worker). GitHub CI runs type checks, API/database tests, dependency audit, build and Playwright local browser smoke tests. The operator reports successful real Make/Sheets callback, cron, alert and recovery tests; independent live-site verification and unrestricted public-launch approval are **not claimed**. See `PRODUCTION_READINESS.md` and `VERIFICATION.md`.
+
+**Support:** [minty.12.shar@gmail.com](mailto:minty.12.shar@gmail.com). The public UI offers one free monitor; no paid plans or checkout are available.
 
 ## What's built
 
-- React + Vite + TypeScript marketing website, free local JSON/URL diagnostic checker, responsive dashboard, basic light/dark theme, guides and provisional legal pages.
+- React + Vite + TypeScript marketing website, free local JSON/URL diagnostic checker, responsive dashboard, light/dark theme, guides, Contact page, factual Privacy Policy and Terms disclosures (subject to operator legal review).
 - Cloudflare Worker API (dependency-free native handler) and D1 migrations. Worker includes scheduled Cron monitoring, HTTPS Make webhook URL allowlist, encrypted webhook URLs at rest, 256-bit hashed callback credentials, 30-minute confirmation window, replay prevention, concurrency protection, failure/recovery tracking, in-app alerts and optional Telegram delivery.
 - Google OAuth (signed ID-token verification, PKCE, nonce/state checks) and optional GitHub OAuth (authorization code + PKCE, verified email). Secure HttpOnly sessions and CSRF token.
 - One active/paused monitor maximum per user, six-hour scheduled cadence, **max three manual tests per rolling 24 hours**, minimum 15-minute manual cooldown.
@@ -21,8 +23,8 @@ db/migrations/       Cloudflare D1 schema
 examples/             Synthetic payload and confirmation payload
 docs/                Detailed Make → Google Sheets wiring guide
 tests/               Node integration and validator tests + optional Vitest
-e2e/                 Playwright browser smoke tests (not run in this environment)
-public/              robots.txt and sitemap.xml (must generate for real origin)
+e2e/                 Playwright browser smoke tests (executed in GitHub Actions)
+public/              robots.txt and sitemap.xml for current workers.dev origin
 scripts/             sitemap generator
 wrangler.jsonc        Cloudflare Worker static assets + D1 + cron + rate limit
 VERIFICATION.md       Verified and unverified acceptance criteria
@@ -183,9 +185,9 @@ At three one-credit Make modules: four scheduled runs/day × 3 credits × 30 day
 - Callback Bearer token is 256-bit random and hashed; callbacks are limited, tied to a specific monitor/run ID, and have a 30-minute deadline.
 - Request and data sizes are bounded, periodic checks have a 6-hour cadence, manual checks are capped, and the native Cloudflare rate-limit binding is approximate per Cloudflare edge location.
 - No stored real lead data. Synthetic addresses use the reserved `.invalid` suffix.
-- No invoices, payment flow, email provider or third-party analytics script are enabled.
-- Marketing legal pages are preliminary operator templates and **not a substitute for legal review** before selling services.
-- The app is a scoped alpha/MVP, not a promise of 100% uptime, compliance certification, or production-grade operational support.
+- No invoices, payment flow or third-party analytics script are enabled. Supabase Auth and Brevo SMTP handle email/password confirmation and reset email.
+- Public privacy/terms pages now describe known product behavior, but operator identity, jurisdiction-specific obligations and professional legal review remain a release gate.
+- The app is an early public-ready implementation of one workflow path, not a guarantee of 100% uptime, compliance certification or detection of every real lead failure.
 
 ## 9. Useful official documentation
 
@@ -200,6 +202,10 @@ At three one-credit Make modules: four scheduled runs/day × 3 credits × 30 day
 
 MIT, see [`LICENSE`](LICENSE). No dependency licenses are copied or redistributed. Review actual installed dependencies and lock versions after the first successful `npm install` before production release.
 
-## Multi-provider sign-in
+## Sign-in and transactional email
 
-The login UI supports Google, GitHub, Facebook, X and passwordless Email OTP, but shows only providers configured on the server. GitHub remains the current tested production fallback. See [authentication setup and migration rollout](docs/authentication.md). Facebook and X require developer credentials/approval; X profile API calls may have usage charges. Email OTP requires a verified sender domain plus a transactional email provider such as Resend. New email challenges require D1 migration `0003_email_otp.sql` to be applied remotely before deploying the new Worker. Accounts created through different sign-in methods are intentionally not auto-linked by email.
+Email/password accounts use hosted **Supabase Auth** for password hashing, email verification and recovery, with **Brevo SMTP** for transactional email delivery. GitHub and Google OAuth remain available when configured. Facebook, X and legacy email OTP are not enabled by default; do not publish them as available capabilities. Different sign-in providers are not automatically linked when email addresses match. See [password-auth configuration](docs/password-auth.md) and [authentication documentation](docs/authentication.md).
+
+## Current public release gate
+
+Do not infer production assurance from passing simulated tests. The operator must validate the deployed Worker, database backup/recovery, SMTP inbox delivery, quota/cost visibility, security monitoring, privacy identity-deletion process and final legal business identity before unrestricted general-public onboarding. See [production readiness](PRODUCTION_READINESS.md).

@@ -84,3 +84,50 @@ test('password reset form checks matching passwords without sending malformed re
  await page.getByRole('button',{name:/Update password/i}).click();
  await expect(page.getByText('Passwords do not match.')).toBeVisible();
 });
+
+test('public Contact, Privacy and Terms pages have useful live content instead of placeholders',async({page})=>{
+ await page.goto('/contact');
+ await expect(page.getByRole('heading',{name:/We're here to help/i})).toBeVisible();
+ await expect(page.getByRole('link',{name:/minty.12.shar@gmail.com/i})).toHaveAttribute('href',/^mailto:minty\.12\.shar@gmail\.com/);
+ await expect(page.getByText(/Support contact details haven't been configured/i)).toHaveCount(0);
+ await expect(page.getByText(/Never send passwords, webhook secrets/i)).toBeVisible();
+ await page.goto('/privacy');
+ await expect(page.getByRole('heading',{name:/Privacy policy/i})).toBeVisible();
+ await expect(page.getByRole('heading',{name:/Retention and account controls/i})).toBeVisible();
+ await expect(page.getByText(/It does not itself remove a separate Supabase Auth identity/i)).toBeVisible();
+ await expect(page.getByText(/DRAFT FOR LAUNCH REVIEW/i)).toHaveCount(0);
+ await page.goto('/terms');
+ await expect(page.getByRole('heading',{name:/Terms of service/i})).toBeVisible();
+ await expect(page.getByRole('heading',{name:/Availability and limits/i})).toBeVisible();
+ await expect(page.getByText(/provisional template/i)).toHaveCount(0);
+});
+test('pricing only shows the actually available free product, and no invented upgrade tiers',async({page})=>{
+ await page.goto('/pricing');
+ await expect(page.getByRole('heading',{name:/LeadPath is free to use/i})).toBeVisible();
+ await expect(page.getByText(/CURRENT PLAN · FREE/i)).toBeVisible();
+ await expect(page.getByRole('link',{name:/Create free account/i})).toHaveAttribute('href','/signup');
+ await expect(page.getByText(/No paid LeadPath upgrade or checkout is offered/i)).toBeVisible();
+ await expect(page.getByText(/\$19|\$49|COMING SOON|PLANNED/i)).toHaveCount(0);
+});
+test('public pages have canonical URLs while auth and private routes explicitly opt out of indexing',async({page})=>{
+ await page.goto('/contact');
+ await expect(page.locator('meta[name="robots"]')).toHaveAttribute('content','index, follow');
+ await expect(page.locator('link[rel="canonical"]')).toHaveAttribute('href','http://127.0.0.1:8787/contact');
+ await expect(page.locator('meta[name="description"]')).toHaveAttribute('content',/Contact LeadPath support/i);
+ await page.goto('/signup');
+ await expect(page.locator('meta[name="robots"]')).toHaveAttribute('content','noindex, nofollow');
+ await page.goto('/reset-password');
+ await expect(page.locator('meta[name="robots"]')).toHaveAttribute('content','noindex, nofollow');
+ await expect(page.locator('link[rel="canonical"]')).toHaveAttribute('href','http://127.0.0.1:8787/');
+});
+test('documentation links resolve to meaningful articles rather than empty placeholder pages',async({page})=>{
+ await page.goto('/docs');
+ await expect(page.getByRole('heading',{name:/Guides that solve real problems/i})).toBeVisible();
+ const links=await page.locator('a.guide-row').evaluateAll(links=>links.map(a=>(a as HTMLAnchorElement).getAttribute('href')));
+ expect(links.length).toBe(6);
+ for(const link of links){
+  await page.goto(link!);
+  await expect(page.getByRole('heading',{name:/Steps to diagnose/i})).toBeVisible();
+  await expect(page.locator('.guide-detail ol li').first()).toBeVisible();
+ }
+});
