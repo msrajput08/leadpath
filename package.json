@@ -9,7 +9,7 @@
     "deploy": "npm run build && wrangler deploy",
     "db:local": "wrangler d1 migrations apply leadpath-db --local",
     "db:remote": "wrangler d1 migrations apply leadpath-db --remote",
-    "test": "node --check scripts/live-queue-setup.mjs && node --check scripts/live-readiness.mjs && npm run typecheck:worker && npm run test:build && node --experimental-sqlite --test tests/*.test.mjs",
+    "test": "node --check scripts/live-operations.mjs && node --check scripts/live-queue-setup.mjs && node --check scripts/live-readiness.mjs && npm run typecheck:worker && npm run test:build && node --experimental-sqlite --test tests/*.test.mjs",
     "typecheck:worker": "tsc --project tsconfig.worker.json --noEmit",
     "test:build": "tsc --project tsconfig.worker.json --noEmit false --outDir .test-build && node scripts/copy-test-security.mjs",
     "test:vitest": "vitest run tests/validators.test.ts",
@@ -17,7 +17,8 @@
     "staging:setup": "node scripts/staging-setup.mjs",
     "live:preflight": "node scripts/live-preflight.mjs",
     "live:readiness": "node scripts/live-readiness.mjs",
-    "live:queue:setup": "node scripts/live-queue-setup.mjs"
+    "live:queue:setup": "node scripts/live-queue-setup.mjs",
+    "live:operations": "node scripts/live-operations.mjs"
   },
   "dependencies": {
     "react": "^19.2.0",
