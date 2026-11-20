@@ -73,21 +73,29 @@ function parseRazorpay(input:unknown,eventId:string):ProviderUpdate|null{
 // Adapter boundary: a later provider implementation must produce a verified,
 // normalized ProviderUpdate and must match a pre-provisioned server-side subscription.
 // The public API cannot create billing mappings or grant its own entitlement.
-export async function razorpayWebhook(req:Request,env:Env):Promise<Response>{
- if(env.BILLING_WEBHOOKS_ENABLED!=='true'||!env.RAZORPAY_WEBHOOK_SECRET)
-  return json({error:'Billing webhook not enabled'},503);
+export async function razorpayWebhook(req:Request,env:Env,mode:'test'|'live'='test'):Promise<Response>{
+ const enabled=mode==='live'?env.LIVE_BILLING_WEBHOOKS_ENABLED==='true':env.BILLING_WEBHOOKS_ENABLED==='true';
+ const secret=mode==='live'?env.RAZORPAY_LIVE_WEBHOOK_SECRET:env.RAZORPAY_WEBHOOK_SECRET;
+ if(!enabled||!secret) return json({error:'Billing webhook not enabled'},503);
  const signature=req.headers.get('x-razorpay-signature')||'';
  const eventId=req.headers.get('x-razorpay-event-id')||'';
  if(!/^[A-Za-z0-9_-]{4,128}$/.test(eventId))return json({error:'Missing event identifier'},400);
  let body:Uint8Array;
  try{body=await boundedBody(req);}catch{return json({error:'Invalid event body'},413);}
- if(!(await verifyRazorpay(env.RAZORPAY_WEBHOOK_SECRET,body,signature)))return json({error:'Invalid signature'},401);
+ if(!(await verifyRazorpay(secret,body,signature)))return json({error:'Invalid signature'},401);
  let parsed:unknown;
  try{parsed=JSON.parse(new TextDecoder('utf-8',{fatal:true}).decode(body));}
  catch{return json({error:'Invalid JSON'},400);}
  const update=parseRazorpay(parsed,eventId);
  if(!update)return json({error:'Invalid event'},400);
+ // A signed Live webhook must carry the exact approved Live plan ID.
+ if(mode==='live'&&update.status){
+  const entity=(parsed as {payload?:{subscription?:{entity?:{plan_id?:unknown}}}}).payload?.subscription?.entity;
+  if(entity?.plan_id!==env.RAZORPAY_LIVE_STARTER_PLAN_ID&&entity?.plan_id!==env.RAZORPAY_LIVE_PRO_PLAN_ID)
+   return json({error:'Unrecognized subscription plan'},400);
+ }
  const fingerprint=hex(await crypto.subtle.digest('SHA-256',body as BufferSource));
+ const scopedEventId=mode==='live'?'live_'+update.eventId:update.eventId;
  const time=Date.now();
  // D1 batch is atomic. Duplicate and delayed updates never grant additional access.
  // Mapping uses only a prior trusted local subscription ID, NEVER webhook notes/email.
@@ -95,16 +103,16 @@ export async function razorpayWebhook(req:Request,env:Env):Promise<Response>{
   env.DB.prepare(`INSERT OR IGNORE INTO payment_events
    (provider,event_id,event_type,provider_subscription_id,body_sha256,received_at)
    VALUES(?,?,?,?,?,?)`)
-    .bind(update.provider,update.eventId,update.eventType,update.subscriptionId,fingerprint,time),
+    .bind(update.provider,scopedEventId,update.eventType,update.subscriptionId,fingerprint,time),
   ...(update.status&&update.subscriptionId?[env.DB.prepare(`UPDATE user_subscriptions
    SET status=?,current_period_start=COALESCE(?,current_period_start),
     current_period_end=COALESCE(?,current_period_end),cancel_at_period_end=?,
     last_event_at=?,updated_at=?
-   WHERE provider=? AND provider_subscription_id=? AND last_event_at<?
+   WHERE provider=? AND provider_subscription_id=? AND billing_mode=? AND last_event_at<?
    AND EXISTS (SELECT 1 FROM payment_events WHERE provider=? AND event_id=? AND body_sha256=?)`)
     .bind(update.status||'pending',update.periodStart,update.periodEnd,update.cancelAtPeriodEnd?1:0,
-      update.createdAt,time,update.provider,update.subscriptionId,update.createdAt,
-      update.provider,update.eventId,fingerprint)]:[])
+      update.createdAt,time,update.provider,update.subscriptionId,mode,update.createdAt,
+      update.provider,scopedEventId,fingerprint)]:[])
  ];
  await env.DB.batch(batch);
  return json({ok:true});
