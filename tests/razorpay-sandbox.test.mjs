@@ -110,3 +110,18 @@ test('sandbox rejects mismatched Razorpay plan amount and never creates a subscr
   assert.equal(visited.length,1,'price mismatch fails before payment initiation');
  } finally{globalThis.fetch=originalFetch;DB.sql.close();}
 });
+
+test('Razorpay TEST plan lookup exposes only safe HTTP diagnostic and leaves no lock',async()=>{
+ for(const [status,fragment] of [[401,'HTTP 401'],[403,'HTTP 403'],[404,'HTTP 404'],[429,'HTTP 429'],[500,'HTTP 500']]){
+  const {DB,send}=await setup(),originalFetch=globalThis.fetch;
+  globalThis.fetch=async()=>new Response('Private Razorpay error body', {status});
+  try{
+   const response=await send('/api/billing/sandbox/create','POST',{plan_code:'starter'});
+   const payload=await response.json();
+   assert.equal(response.status,status===429?503:502);
+   assert.ok(payload.error.includes(fragment));
+   assert.ok(!JSON.stringify(payload).includes('Private Razorpay'));
+   assert.equal((await DB.prepare('SELECT COUNT(*) n FROM billing_creation_locks').first()).n,0);
+  }finally{globalThis.fetch=originalFetch;DB.sql.close();}
+ }
+});
