@@ -2,6 +2,7 @@ import type { Env, Monitor, Session } from './types.js';
 import { json, fail, getSession, mustBeSameOrigin, csrfOk, readSmallJson, publicMonitor, audit, now } from './util.js';
 import { newRandomString, sha256, encryptSecret, validateMakeWebhook } from './security.mjs';
 import { runMonitor } from './engine.js';
+import { billingSummary, getEntitlements } from './entitlements.js';
 import { emailLoginConfigured } from './email-auth.js';
 import { passwordAuthConfigured } from './password-auth.js';
 
@@ -46,9 +47,15 @@ export async function handleApi(req:Request,env:Env,ctx:Context):Promise<Respons
  if (req.method!=='GET' && (!mustBeSameOrigin(req,env) || !csrfOk(req,session))) return fail(403,'CSRF protection failed. Reload the page.');
  const userId=session.user_id;
  if (pathname==='/api/me' && req.method==='GET') return json({ id:userId,email:session.email,name:session.name,avatar_url:session.avatar_url,csrf_token:session.csrf_token });
+ if (pathname==='/api/billing' && req.method==='GET') return json(await billingSummary(env,userId));
+ if (['/api/billing/checkout','/api/billing/portal','/api/billing/cancel'].includes(pathname) && req.method==='POST') {
+  return fail(503,'Subscription management is not available yet. No payment was collected or changed.');
+ }
  if (pathname==='/api/monitors' && req.method==='GET') {
   const result=await env.DB.prepare('SELECT * FROM monitors WHERE user_id=? ORDER BY created_at DESC').bind(userId).all<Record<string,unknown>>();
-  return json({monitors:result.results.map(publicMonitor)});
+  const entitlement=await getEntitlements(env,userId);
+  const allowed=new Set([...result.results].sort((a,b)=>Number(a.created_at)-Number(b.created_at)||String(a.id).localeCompare(String(b.id))).slice(0,entitlement.monitor_limit).map(m=>m.id));
+  return json({monitors:result.results.map(m=>({...publicMonitor(m),interval_seconds:entitlement.effective_interval_seconds,within_plan:allowed.has(m.id)}))});
  }
  if (pathname==='/api/monitors' && req.method==='POST') {
   const form=await readSmallJson(req);
@@ -58,14 +65,17 @@ export async function handleApi(req:Request,env:Env,ctx:Context):Promise<Respons
   if (!candidate.ok || !candidate.url) return fail(400,candidate.error||'Invalid Make webhook.');
   if (form.authorized!==true) return fail(400,'Please confirm you own or are authorized to test this Make workflow.');
   if (!env.WEBHOOK_ENCRYPTION_KEY) return fail(503,'Webhook encryption secret not configured.');
-  const count=await env.DB.prepare('SELECT COUNT(*) AS total FROM monitors WHERE user_id=?').bind(userId).first<{total:number}>();
-  if ((count?.total||0)>=1) return fail(403,'Free plan permits one monitor. Delete your existing monitor to replace it.');
+  const entitlement=await getEntitlements(env,userId);
   const id=crypto.randomUUID(); const callbackSecret=newRandomString();
   const time=now(); const ciphertext=await encryptSecret(candidate.url,env.WEBHOOK_ENCRYPTION_KEY);
-  await env.DB.prepare("INSERT INTO monitors (id,user_id,name,webhook_ciphertext,secret_hash,state,health,interval_seconds,next_due,created_at,updated_at) VALUES(?,?,?,?,?,'active','configuration_required',21600,?,?,?)")
-   .bind(id,userId,name,ciphertext,await sha256(callbackSecret),time+6*3600000,time,time).run();
+  const nextDue=time+entitlement.effective_interval_seconds*1000;
+  // A single SQL statement checks and inserts; concurrent creates cannot overrun the allowance.
+  // interval_seconds is the legacy >=6h column; all current reads/scheduling use entitlements.
+  const inserted=await env.DB.prepare("INSERT INTO monitors (id,user_id,name,webhook_ciphertext,secret_hash,state,health,interval_seconds,next_due,created_at,updated_at) SELECT ?,?,?,?,?,'active','configuration_required',21600,?,?,? WHERE (SELECT COUNT(*) FROM monitors WHERE user_id=?)<? AND EXISTS(SELECT 1 FROM subscriptions WHERE user_id=? AND updated_at=?)")
+   .bind(id,userId,name,ciphertext,await sha256(callbackSecret),nextDue,time,time,userId,entitlement.monitor_limit,userId,entitlement.subscription.updated_at).run();
+  if (!inserted.meta.changes) return fail(403,`${entitlement.name} permits ${entitlement.monitor_limit} monitor(s). Existing monitors and history are preserved.`);
   await audit(env,userId,'monitor_created',id);
-  return json({ monitor:{id,name,state:'active',health:'configuration_required',interval_seconds:21600,next_due:time+6*3600000},
+  return json({ monitor:{id,name,state:'active',health:'configuration_required',interval_seconds:entitlement.effective_interval_seconds,next_due:nextDue},
    callback_url:new URL(`/api/callback/${id}`,env.BASE_URL).toString(),callback_secret:callbackSecret,
    instructions:'Save this secret now: it will never be shown again. For first-time Make webhook verification, map both run_id and proof_code from the incoming webhook into the HTTP callback body after Google Sheets succeeds.' },201);
  }
@@ -75,12 +85,13 @@ export async function handleApi(req:Request,env:Env,ctx:Context):Promise<Respons
   const monitor=await owned(env,userId,id);
   if (!monitor) return fail(404,'Monitor not found.');
   if (action==='runs' && req.method==='GET') {
-   const rows=await env.DB.prepare('SELECT id,state,source,created_at,trigger_sent_at,trigger_accepted_at,expires_at,confirmed_at,response_status,error_code,duration_ms FROM runs WHERE monitor_id=? ORDER BY created_at DESC LIMIT 50').bind(id).all();
+   const entitlement=await getEntitlements(env,userId);
+   const rows=await env.DB.prepare('SELECT id,state,source,created_at,trigger_sent_at,trigger_accepted_at,expires_at,confirmed_at,response_status,error_code,duration_ms FROM runs WHERE monitor_id=? ORDER BY created_at DESC LIMIT ?').bind(id,entitlement.history_page_size).all();
    return json({runs:rows.results});
   }
   if (action==='run' && req.method==='POST') {
    const result=await runMonitor(env,monitor,'manual',ctx);
-   return json(result,result.accepted?202:429);
+   return json(result.accepted?result:{...result,error:result.message},result.accepted?202:429);
   }
   if (action==='rotate' && req.method==='POST') {
    const callbackSecret=newRandomString();
@@ -94,8 +105,10 @@ export async function handleApi(req:Request,env:Env,ctx:Context):Promise<Respons
    const payload=await readSmallJson(req);
    if (payload.state!=='active' && payload.state!=='paused') return fail(400,'Only active or paused is allowed.');
    const isPaused=payload.state==='paused';
-   await env.DB.prepare('UPDATE monitors SET state=?,health=?,next_due=?,lock_until=NULL,updated_at=? WHERE id=? AND user_id=?')
-    .bind(payload.state,isPaused?'paused':'configuration_required',now()+(isPaused?6*3600000:0),now(),id,userId).run();
+   const entitlement=await getEntitlements(env,userId);
+   const resumeAt=Math.max(now(),(monitor.last_checked||0)+entitlement.effective_interval_seconds*1000);
+   await env.DB.prepare('UPDATE monitors SET state=?,health=?,next_due=?,updated_at=? WHERE id=? AND user_id=?')
+    .bind(payload.state,isPaused?'paused':'configuration_required',resumeAt,now(),id,userId).run();
    await audit(env,userId,isPaused?'monitor_paused':'monitor_resumed',id);
    return json({ok:true,state:payload.state});
   }
@@ -133,8 +146,10 @@ export async function handleApi(req:Request,env:Env,ctx:Context):Promise<Respons
   });
   return result.ok?json({ok:true}):fail(502,'Telegram delivery was rejected. Check bot chat access and chat ID.');
  }
- if (pathname==='/api/data/export' && req.method==='GET') return json(await accountExport(env,userId),200,{'Content-Disposition':'attachment; filename="leadpath-export.json"'});
+ if (pathname==='/api/data/export' && req.method==='GET') return json({...await accountExport(env,userId),billing:await billingSummary(env,userId)},200,{'Content-Disposition':'attachment; filename="leadpath-export.json"'});
  if (pathname==='/api/account' && req.method==='DELETE') {
+  const subscription=await env.DB.prepare('SELECT provider_subscription_id,status FROM subscriptions WHERE user_id=?').bind(userId).first<{provider_subscription_id:string|null;status:string}>();
+  if (subscription?.provider_subscription_id && !['canceled','expired'].includes(subscription.status)) return fail(409,'Cancel your provider subscription before deleting your account. Contact support while billing management is unavailable.');
   // SQLite/D1 foreign keys cascade sessions, monitors, runs, acknowledgments, alerts, preferences and audits.
   await env.DB.prepare('DELETE FROM users WHERE id=?').bind(userId).run();
   const local=new URL(env.BASE_URL).protocol==='http:' && new URL(env.BASE_URL).hostname==='localhost';

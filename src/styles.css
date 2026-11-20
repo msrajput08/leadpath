@@ -116,3 +116,19 @@
 .guide-related ul{list-style:none;margin:0;padding:0;display:grid;gap:12px}
 .guide-detail>p{line-height:1.85;max-width:750px}
 @media(max-width:700px){.seo-guide-links{grid-template-columns:1fr}}
+
+/* Plan and billing reuse the workspace's surfaces, spacing and colour tokens. */
+.plan-summary{display:flex;align-items:center;justify-content:space-between;gap:20px;margin-bottom:24px}
+.plan-summary h2{margin:8px 0}.plan-summary p{margin:0}
+.billing-usage{display:flex;align-items:baseline;gap:14px;margin:24px 0 12px}
+.billing-usage strong{font-size:42px;letter-spacing:-2px}.billing-usage strong span{font-size:22px;opacity:.5}
+progress{width:100%;height:7px;accent-color:#c5ee93}
+.billing-facts{margin:24px 0}.billing-facts>div{display:flex;justify-content:space-between;gap:20px;padding:14px 0;border-bottom:1px solid var(--border)}
+.billing-facts dt{opacity:.65}.billing-facts dd{margin:0;text-align:right;text-transform:capitalize}
+.billing-comparison{margin-top:40px}.billing-plan-grid{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:20px;margin-top:24px}
+.billing-plan-grid h3{font-size:26px;margin:12px 0}.billing-price{font-size:20px}
+.billing-plan-grid ul{padding-left:20px;min-height:140px;line-height:1.8}.billing-current{border-color:#8ca967}
+.monitor-selector{margin:16px 0 24px;display:flex;gap:12px;align-items:center;flex-wrap:wrap}
+.monitor-selector select{min-width:0;flex:1;padding:12px;border:1px solid var(--border);border-radius:8px;background:var(--bg);color:inherit}
+.activity-list{max-height:620px;overflow-y:auto}
+@media(max-width:800px){.billing-plan-grid{grid-template-columns:1fr}.plan-summary{align-items:flex-start;flex-direction:column}.billing-facts>div{gap:12px}.monitor-selector label{width:100%}.billing-plan-grid ul{min-height:0}}

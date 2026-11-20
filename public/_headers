@@ -39,3 +39,7 @@
 /account
   X-Robots-Tag: noindex, nofollow
   Cache-Control: no-store
+
+/billing
+  X-Robots-Tag: noindex, nofollow
+  Cache-Control: no-store

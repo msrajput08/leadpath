@@ -9,7 +9,7 @@ import {
 const base='https://leadpath.example';
 function mockDB(){
  const raw=new DatabaseSync(':memory:');
- for(const name of ['0001_init.sql','0002_webhook_ownership.sql','0003_email_otp.sql','0004_password_auth.sql']){
+ for(const name of ['0001_init.sql','0002_webhook_ownership.sql','0003_email_otp.sql','0004_password_auth.sql','0005_subscription_foundation.sql']){
   raw.exec(fs.readFileSync(new URL('../db/migrations/'+name,import.meta.url),'utf8'));
  }
  return {raw,prepare(sql){return{sql,args:[],bind(...args){this.args=args;return this;},

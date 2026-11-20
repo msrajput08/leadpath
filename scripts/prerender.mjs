@@ -66,7 +66,7 @@ try{
   await write(route,base.replace('<div id="root"></div>','<div id="root" data-prerendered="true">'+markup+'</div>'));
  }
  for(const route of PRIVATE_ROUTES){
-  const title=route==='/dashboard'?'Dashboard | LeadPath':route==='/account'?'Account settings | LeadPath':'Secure account access | LeadPath';
+  const title=route==='/dashboard'?'Dashboard | LeadPath':route==='/billing'?'Plan & billing | LeadPath':route==='/account'?'Account settings | LeadPath':'Secure account access | LeadPath';
   await write(route,headFor(template,route,{title,description:'Private LeadPath account page.'},SITE_ORIGIN,false));
  }
  const sitemap='<?xml version="1.0" encoding="UTF-8"?>\n<urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">\n'+publicRoutes.map(([p])=>'  <url><loc>'+escapeHtml(SITE_ORIGIN+p)+'</loc></url>').join('\n')+'\n</urlset>\n';

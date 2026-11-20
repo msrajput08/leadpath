@@ -5,15 +5,7 @@ import {DatabaseSync} from 'node:sqlite';
 import {handleApi} from '../.test-build/api.js';
 import {confirmCallback,sweepTimedOut,scheduled,runMonitor} from '../.test-build/engine.js';
 import {sha256,newRandomString,encryptSecret} from '../worker/security.mjs';
-function makeDb(){
- const sql=new DatabaseSync(':memory:');sql.exec(fs.readFileSync(new URL('../db/migrations/0001_init.sql',import.meta.url),'utf8'));
- sql.exec(fs.readFileSync(new URL('../db/migrations/0002_webhook_ownership.sql',import.meta.url),'utf8'));
- const db={
-  prepare(s){const x={sql:s,args:[],bind(...v){this.args=v;return this;},async first(){return sql.prepare(this.sql).get(...this.args)||null;},async all(){return {results:sql.prepare(this.sql).all(...this.args),success:true};},async run(){const r=sql.prepare(this.sql).run(...this.args);return {success:true,meta:{changes:Number(r.changes)}};}};return x;},
-  async batch(statements){sql.exec('BEGIN');try{const out=[];for(const stmt of statements)out.push(await stmt.run());sql.exec('COMMIT');return out;}catch(e){sql.exec('ROLLBACK');throw e;}},
-  sql
- };return db;
-}
+import {makeDb} from './helpers/db.mjs';
 const ctx={waitUntil(p){p.catch(()=>{});}};
 function http(url,method='GET',data,token='',csrf='',cookie=''){
  const headers={Origin:'https://leadpath.example',cookie};
@@ -152,6 +144,6 @@ test('scheduler claim is idempotent; upstream errors are not marked confirmed; p
   await sweepTimedOut(env,ctx);
   assert.equal((await DB.prepare('SELECT state FROM runs WHERE id=?').bind(pausedExpiredId).first()).state,'unconfirmed');
   assert.equal((await DB.prepare('SELECT health FROM monitors WHERE id=?').bind(mid).first()).health,'paused','late timeout must not resume a paused monitor');
-  await assert.rejects(DB.prepare("INSERT INTO monitors (id,user_id,name,webhook_ciphertext,secret_hash,state,health,interval_seconds,next_due,created_at,updated_at) VALUES(?,?,?,?,?,'active','configuration_required',21600,?,?,?)").bind(crypto.randomUUID(),uid,'Second','cipher','hash',t,t,t).run(),/UNIQUE/);
+  // Multi-monitor allowances are now enforced atomically by API/engine; covered in subscriptions.test.mjs.
  }finally{globalThis.fetch=originalFetch;DB.sql.close();}
 });
