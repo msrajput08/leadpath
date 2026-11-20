@@ -150,6 +150,10 @@ export async function handleApi(req:Request,env:Env,ctx:Context):Promise<Respons
  }
  if (pathname==='/api/data/export' && req.method==='GET') return json(await accountExport(env,userId),200,{'Content-Disposition':'attachment; filename="leadpath-export.json"'});
  if (pathname==='/api/account' && req.method==='DELETE') {
+  // Never orphan a real Razorpay mandate: deleting D1 alone cannot stop recurring charges.
+  const activeBilling=await env.DB.prepare(`SELECT id FROM user_subscriptions WHERE user_id=?
+   AND billing_mode='live' AND status IN ('pending','active','past_due') LIMIT 1`).bind(userId).first();
+  if(activeBilling)return fail(409,'Cancel your live Razorpay subscription and wait until it ends before deleting your account. Contact support if the provider cannot cancel.');
   // SQLite/D1 foreign keys cascade sessions, monitors, runs, acknowledgments, alerts, preferences and audits.
   await env.DB.prepare('DELETE FROM users WHERE id=?').bind(userId).run();
   const local=new URL(env.BASE_URL).protocol==='http:' && new URL(env.BASE_URL).hostname==='localhost';
