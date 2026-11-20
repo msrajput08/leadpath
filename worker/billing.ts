@@ -88,12 +88,12 @@ export async function razorpayWebhook(req:Request,env:Env):Promise<Response>{
  const time=Date.now();
  // D1 batch is atomic. Duplicate and delayed updates never grant additional access.
  // Mapping uses only a prior trusted local subscription ID, NEVER webhook notes/email.
- await env.DB.batch([
+ const batch=[
   env.DB.prepare(`INSERT OR IGNORE INTO payment_events
    (provider,event_id,event_type,provider_subscription_id,body_sha256,received_at)
    VALUES(?,?,?,?,?,?)`)
     .bind(update.provider,update.eventId,update.eventType,update.subscriptionId,fingerprint,time),
-  env.DB.prepare(`UPDATE user_subscriptions
+  ...(update.status&&update.subscriptionId?[env.DB.prepare(`UPDATE user_subscriptions
    SET status=?,current_period_start=COALESCE(?,current_period_start),
     current_period_end=COALESCE(?,current_period_end),cancel_at_period_end=?,
     last_event_at=?,updated_at=?
@@ -101,7 +101,8 @@ export async function razorpayWebhook(req:Request,env:Env):Promise<Response>{
    AND EXISTS (SELECT 1 FROM payment_events WHERE provider=? AND event_id=? AND body_sha256=?)`)
     .bind(update.status||'pending',update.periodStart,update.periodEnd,update.cancelAtPeriodEnd?1:0,
       update.createdAt,time,update.provider,update.subscriptionId,update.createdAt,
-      update.provider,update.eventId,fingerprint)
- ]);
+      update.provider,update.eventId,fingerprint)]:[])
+ ];
+ await env.DB.batch(batch);
  return json({ok:true});
 }
