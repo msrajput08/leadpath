@@ -41,7 +41,7 @@ function asUnixMs(input:unknown):number|null {
  if(typeof input!=='number'||!Number.isSafeInteger(input)||input<=0)return null;
  const ms=input*1000;return Number.isSafeInteger(ms)?ms:null;
 }
-function parseRazorpay(input:unknown,eventId:string):ProviderUpdate|null{
+function parseRazorpay(input:unknown,eventId:string,mode:'test'|'live'):ProviderUpdate|null{
  if(!input||typeof input!=='object')return null;
  const event=input as Record<string,unknown>;
  if(typeof event.event!=='string'||typeof event.created_at!=='number')return null;
@@ -60,10 +60,11 @@ function parseRazorpay(input:unknown,eventId:string):ProviderUpdate|null{
  const status=statuses[event.event]||null;
  // Only a signed active subscription with a valid future period may renew access.
  const periodEnd=asUnixMs(entity?.current_end);
- const validActive=status==='active'&&entity?.status==='active'&&periodEnd!==null&&periodEnd>Date.now();
+ const verifiedCharge=mode==='test'||(typeof entity?.paid_count==='number'&&Number.isInteger(entity.paid_count)&&entity.paid_count>0);
+ const validActive=status==='active'&&entity?.status==='active'&&periodEnd!==null&&periodEnd>Date.now()&&verifiedCharge;
  const cancelAtPeriodEnd=entity?.cancel_at_cycle_end===1 || entity?.cancel_at_cycle_end===true;
  // A scheduled end-of-cycle cancellation retains prepaid access only through its verified period end.
- const paidThroughCancellation=status==='cancelled'&&cancelAtPeriodEnd&&periodEnd!==null&&periodEnd>Date.now();
+ const paidThroughCancellation=status==='cancelled'&&cancelAtPeriodEnd&&periodEnd!==null&&periodEnd>Date.now()&&verifiedCharge;
  return {provider:'razorpay',eventId,eventType:event.event,subscriptionId,
   status:paidThroughCancellation?'active':status==='active'&&!validActive?'pending':status,
   periodStart:asUnixMs(entity?.current_start),periodEnd,
@@ -86,7 +87,7 @@ export async function razorpayWebhook(req:Request,env:Env,mode:'test'|'live'='te
  let parsed:unknown;
  try{parsed=JSON.parse(new TextDecoder('utf-8',{fatal:true}).decode(body));}
  catch{return json({error:'Invalid JSON'},400);}
- const update=parseRazorpay(parsed,eventId);
+ const update=parseRazorpay(parsed,eventId,mode);
  if(!update)return json({error:'Invalid event'},400);
  // A signed Live webhook must carry the exact approved Live plan ID.
  if(mode==='live'&&update.status){
