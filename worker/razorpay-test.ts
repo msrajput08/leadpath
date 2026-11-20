@@ -2,6 +2,21 @@ import type {Env} from './types.js';
 import {json,fail,readSmallJson} from './util.js';
 
 type CheckoutPlan='starter'|'pro';
+class RazorpayApiError extends Error {
+ constructor(readonly status:number){super('Razorpay API returned HTTP '+status);}
+}
+function planLookupFailure(error:unknown):Response {
+ if(error instanceof RazorpayApiError){
+  if(error.status===401||error.status===403)
+   return fail(502,'Razorpay TEST API rejected the keys (HTTP '+error.status+'). Recheck Test Key ID and Secret.');
+  if(error.status===404)
+   return fail(502,'Razorpay TEST plan was not found (HTTP 404). Use a Test Mode plan ID from the same account as the Test API keys.');
+  if(error.status===429)
+   return fail(503,'Razorpay test API rate limit reached (HTTP 429). Retry later.');
+  return fail(502,'Razorpay TEST plan lookup failed (HTTP '+error.status+').');
+ }
+ return fail(502,'Cannot reach Razorpay TEST plan API. Check provider availability or staging network.');
+}
 type GatewayPlan={id?:string;period?:string;interval?:number;item?:{amount?:number;currency?:string}};
 type GatewaySubscription={id?:string;plan_id?:string;short_url?:string;status?:string;current_end?:number};
 const planId=(s:unknown):s is string=>typeof s==='string'&&/^plan_[A-Za-z0-9]{6,80}$/.test(s);
@@ -31,7 +46,7 @@ async function gateway<T>(env:Env,method:'GET'|'POST',path:string,body?:unknown)
    'content-type':'application/json'},body:body===undefined?undefined:JSON.stringify(body),
    signal:AbortSignal.timeout(9000),redirect:'error'
  });
- if(!response.ok)throw new Error('GATEWAY_REJECTED');
+ if(!response.ok)throw new RazorpayApiError(response.status);
  return await response.json() as T;
 }
 export async function sandboxCreateSubscription(env:Env,userId:string,request:Request):Promise<Response>{
@@ -52,7 +67,7 @@ export async function sandboxCreateSubscription(env:Env,userId:string,request:Re
  // A wrong ID, rejected GET or price mismatch must not block the next attempt for 30 minutes.
  let verifiedPlan:GatewayPlan;
  try {verifiedPlan=await gateway<GatewayPlan>(env,'GET','plans/'+providerPlanId);}
- catch {return fail(502,'Unable to verify Razorpay test plan. Check Test Mode plan IDs and API keys.');}
+ catch(error) {return planLookupFailure(error);}
  if(verifiedPlan.id!==providerPlanId||verifiedPlan.period!=='monthly'||verifiedPlan.interval!==1 ||
     verifiedPlan.item?.currency!=='INR'||verifiedPlan.item.amount!==plan.price_minor_units)
   return fail(503,'Razorpay test plan does not match LeadPath INR price or monthly interval.');
