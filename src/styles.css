@@ -86,3 +86,18 @@
 .auth-result .auth-spam-note{display:block;width:100%;margin:7px 0 2px;padding:12px 14px;border-radius:10px;border:1px solid rgba(164,231,189,.25);background:rgba(164,231,189,.07);line-height:1.65;color:#c4d8cf}
 .auth-spam-note svg{display:inline-block;vertical-align:-3px;margin-right:5px}
 .auth-result .auth-spam-note strong{color:#e5ffec;font-weight:750}
+
+/* Public release: clear support contact, readable policy pages and available pricing only. */
+.price-grid-live{grid-template-columns:repeat(2,minmax(0,1fr));max-width:940px}
+.price-grid-live .pricing-card{min-height:0}
+.price-grid-live .pricing-card h2{font-size:1.7rem;margin:18px 0 8px}
+.price-grid-live .pricing-card ul{margin-bottom:22px}
+.support-contact{margin:35px 0;padding:30px;max-width:750px}
+.support-contact h2{font-size:1.3rem;margin:0 0 17px}
+.support-email{display:inline-flex;align-items:center;gap:11px;color:var(--green);font-size:clamp(1rem,3vw,1.3rem);font-weight:750;overflow-wrap:anywhere}
+.support-contact p{font-size:.89rem;line-height:1.75;margin:21px 0 0;max-width:630px}
+.legal-content{padding-bottom:48px}
+.legal-content h2{font-size:1.24rem;margin:30px 0 10px;letter-spacing:-.02em}
+.legal-content p:not(.lead){line-height:1.8;max-width:780px}
+.legal-content a{color:var(--green);text-decoration:underline}
+@media(max-width:700px){.price-grid-live{grid-template-columns:1fr}.support-contact{padding:22px}.support-email{align-items:flex-start}}

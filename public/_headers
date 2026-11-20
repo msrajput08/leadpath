@@ -5,3 +5,37 @@
   Permissions-Policy: camera=(), microphone=(), geolocation=()
   Strict-Transport-Security: max-age=31536000
   Content-Security-Policy: default-src 'self'; script-src 'self'; style-src 'self' https://fonts.googleapis.com; font-src 'self' https://fonts.gstatic.com; img-src 'self' data: https://avatars.githubusercontent.com; connect-src 'self'; object-src 'none'; base-uri 'self'; frame-ancestors 'none'; form-action 'self'
+
+/login
+  X-Robots-Tag: noindex, nofollow
+  Cache-Control: no-store
+
+/signup
+  X-Robots-Tag: noindex, nofollow
+  Cache-Control: no-store
+
+/forgot-password
+  X-Robots-Tag: noindex, nofollow
+  Cache-Control: no-store
+
+/resend-verification
+  X-Robots-Tag: noindex, nofollow
+  Cache-Control: no-store
+
+/verify-email
+  X-Robots-Tag: noindex, nofollow
+  Cache-Control: no-store
+  Referrer-Policy: no-referrer
+
+/reset-password
+  X-Robots-Tag: noindex, nofollow
+  Cache-Control: no-store
+  Referrer-Policy: no-referrer
+
+/dashboard
+  X-Robots-Tag: noindex, nofollow
+  Cache-Control: no-store
+
+/account
+  X-Robots-Tag: noindex, nofollow
+  Cache-Control: no-store
