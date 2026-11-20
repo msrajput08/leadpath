@@ -213,3 +213,19 @@ Do not infer production assurance from passing simulated tests. The operator mus
 ## SEO and crawlable public pages
 
 `npm run build` generates 16 static HTML pages with unique titles, descriptions, canonical links, JSON-LD schema, related-guide links, `sitemap.xml`, `robots.txt` and a real 404 response. React hydrates the static markup for interactivity. Private auth and account pages are separate noindex shells. Read [SEO release and Google Search Console steps](docs/seo-release.md). **Search Console verification and indexing require separate operator actions; ranking is not guaranteed.**
+
+## Subscription foundation (billing disabled)
+
+The dedicated subscription foundation adds server-side Free/Starter/Pro entitlements,
+non-destructive D1 migration 0005, bounded monitoring quotas and verified payment-event
+processing. Paid features and checkout remain unavailable; proposed $9/$29 prices are
+internal planning values, not public offers. The current safe scheduler remains capped
+at 288 scheduled checks/day across all accounts.
+
+- [Architecture audit](docs/subscription-audit.md)
+- [Implementation, migration and exact launch gates](docs/subscriptions.md)
+- [India/international provider comparison](docs/billing-providers.md)
+- [Capacity and reproducible cost model](docs/subscription-costs.md)
+- [Validation and limitations](docs/subscription-validation.md)
+
+Do not run `db:remote`, merge or deploy this feature without explicit approval.

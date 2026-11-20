@@ -1,10 +1,10 @@
 import type { Env, Monitor, Run } from './types.js';
+import { getEntitlements, resourceLimits } from './entitlements.js';
 import { json, now, readBoundedJson, InputError } from './util.js';
 import { CONFIRMATION_WINDOW_MS, decryptSecret, syntheticPayload, sha256, constantTimeEqual, validateMakeWebhook, webhookOwnershipProof } from './security.mjs';
 
 type SideEffect = { waitUntil(promise: Promise<unknown>): void };
 export const HOUR6 = 6*60*60*1000;
-const MANUAL_COOLDOWN=15*60*1000;
 
 async function emitAlert(env: Env, monitor: Monitor, runId: string, kind: 'failure'|'recovery', ctx: SideEffect): Promise<void> {
  const message=kind==='failure' ? `Delivery unconfirmed repeatedly for “${monitor.name}”. Check the Make scenario and Google Sheets.` : `Delivery confirmed again for “${monitor.name}”.`;
@@ -36,24 +36,29 @@ async function failRun(env: Env, runId: string, monitorId: string, state: 'uncon
 export async function runMonitor(env: Env, monitor: Monitor, source: 'manual'|'scheduled', ctx: SideEffect): Promise<{accepted:boolean;run_id?:string;message?:string}> {
  const time=now(); const runId=crypto.randomUUID();
  if (source==='scheduled' && !monitor.verified_at) return {accepted:false,message:'Verify Make webhook ownership before automatic monitoring.'};
- if (source==='manual') {
-  const recent=await env.DB.prepare("SELECT COUNT(*) AS total FROM runs WHERE monitor_id=? AND source='manual' AND created_at>=?").bind(monitor.id,time-86400000).first<{total:number}>();
-  if ((recent?.total||0)>=3) return {accepted:false,message:'Free plan allows up to 3 manual runs in a rolling 24 hours.'};
- }
- // Atomic claim: last_checked + next_due prevent overlapping executions across cron / manual callers.
- const guard=source==='scheduled' ? 'next_due<=?' : '(last_checked IS NULL OR last_checked<=?)';
- const threshold=source==='scheduled'?time:time-MANUAL_COOLDOWN;
- const result=await env.DB.prepare(`UPDATE monitors SET next_due=?,lock_until=?,last_checked=?,last_run_id=?,health='pending',updated_at=? WHERE id=? AND state='active' AND ${guard} AND (lock_until IS NULL OR lock_until<?)`)
-  .bind(time+HOUR6,time+60000,time,runId,time,monitor.id,threshold,time).run();
- if (!result.meta.changes) return {accepted:false,message:'Monitor paused, locked or in manual-test cooldown (15 minutes).'};
- try {
-  await env.DB.prepare("INSERT INTO runs (id,monitor_id,state,source,created_at,expires_at) VALUES(?,?,'pending',?,?,?)")
-   .bind(runId,monitor.id,source,time,time+CONFIRMATION_WINDOW_MS).run();
- } catch {
-  await env.DB.prepare("UPDATE monitors SET health='degraded',lock_until=NULL,next_due=? WHERE id=? AND last_run_id=?")
-   .bind(time+MANUAL_COOLDOWN,monitor.id,runId).run();
-  return {accepted:false,message:'Failed to initialize a persistent monitoring run.'};
- }
+ const entitlement=await getEntitlements(env,monitor.user_id,time);
+ const limits=resourceLimits(env),day=new Date(time).toISOString().slice(0,10);
+ const guard=source==='scheduled' ? 'next_due<=? AND verified_at IS NOT NULL' : '(last_checked IS NULL OR last_checked<=?)';
+ const threshold=source==='scheduled'?time:time-entitlement.manual_cooldown_seconds*1000;
+ // A downgrade never deletes monitors. Only the oldest allowed monitors execute.
+ // Claim + run insert + trigger-based accounting form ONE D1 transaction. A failed
+ // insert rolls back the claim; a crashed dispatch is not retried (Make isn't idempotent).
+ const result=await env.DB.batch<{meta:{changes:number}}>([
+  env.DB.prepare(`UPDATE monitors SET next_due=?,lock_until=?,last_checked=?,last_run_id=?,health='pending',updated_at=?
+   WHERE id=? AND user_id=? AND state='active' AND ${guard} AND (lock_until IS NULL OR lock_until<?)
+   AND (?='manual' OR last_checked IS NULL OR last_checked<=?)
+   AND EXISTS(SELECT 1 FROM subscriptions WHERE user_id=? AND updated_at=?)
+   AND id IN (SELECT id FROM monitors WHERE user_id=? ORDER BY created_at,id LIMIT ?)
+   AND NOT EXISTS(SELECT 1 FROM runs WHERE monitor_id=? AND state='pending' AND expires_at>?)
+   AND COALESCE((SELECT ${source==='scheduled'?'scheduled_runs':'manual_runs'} FROM resource_usage WHERE day=?),0)<?
+   AND (?='scheduled' OR (SELECT COUNT(*) FROM run_usage WHERE user_id=? AND source='manual' AND created_at>=?)<?)`)
+   .bind(time+entitlement.effective_interval_seconds*1000,time+60000,time,runId,time,monitor.id,monitor.user_id,
+    threshold,time,source,time-entitlement.effective_interval_seconds*1000,monitor.user_id,entitlement.subscription.updated_at,monitor.user_id,entitlement.monitor_limit,monitor.id,time,day,
+    source==='scheduled'?limits.scheduledPerDay:limits.manualPerDay,source,monitor.user_id,time-86400000,entitlement.manual_daily_limit),
+  env.DB.prepare("INSERT INTO runs (id,monitor_id,state,source,created_at,expires_at) SELECT ?,id,'pending',?,?,? FROM monitors WHERE id=? AND last_run_id=?")
+   .bind(runId,source,time,time+CONFIRMATION_WINDOW_MS,monitor.id,runId)
+ ]);
+ if (!result[0]?.meta.changes) return {accepted:false,message:'Check unavailable: monitor paused, awaiting confirmation, outside plan allowance, or a cooldown / usage limit was reached.'};
  let target: string;
  try {
   if (!env.WEBHOOK_ENCRYPTION_KEY) throw new Error('NO_KEY');
@@ -126,24 +131,35 @@ export async function confirmCallback(req: Request, env: Env, monitorId: string,
 }
 
 export async function sweepTimedOut(env: Env, ctx: SideEffect): Promise<void> {
- const expired=await env.DB.prepare("SELECT id,monitor_id FROM runs WHERE state='pending' AND expires_at<? ORDER BY expires_at LIMIT 8").bind(now()).all<{id:string;monitor_id:string}>();
+ const expired=await env.DB.prepare("SELECT id,monitor_id FROM runs WHERE state='pending' AND expires_at<? ORDER BY expires_at LIMIT 2").bind(now()).all<{id:string;monitor_id:string}>();
  for (const run of expired.results) await failRun(env,run.id,run.monitor_id,'unconfirmed','ACK_TIMEOUT',ctx);
 }
 export async function scheduled(env: Env, ctx: SideEffect): Promise<void> {
- // Compact batches to keep daily free-tier D1 queries and cron CPU bounded.
+ // Once per 15-minute slot across overlapping/retried cron invocations. A crash
+ // skips the remainder of that slot; overdue monitors are picked fairly next time.
+ const time=now(),tick=Math.floor(time/900000);
+ const claim=await env.DB.prepare(`INSERT INTO job_ticks(job,tick) VALUES('monitoring',?)
+  ON CONFLICT(job) DO UPDATE SET tick=excluded.tick WHERE job_ticks.tick<excluded.tick`).bind(tick).run();
+ if (!claim.meta.changes) return;
  await sweepTimedOut(env,ctx);
- const due=await env.DB.prepare("SELECT * FROM monitors WHERE state='active' AND verified_at IS NOT NULL AND next_due<=? AND (lock_until IS NULL OR lock_until<?) ORDER BY next_due LIMIT 3")
-  .bind(now(),now()).all<Monitor>();
- for (const monitor of due.results) await runMonitor(env,monitor,'scheduled',ctx);
- // Daily cleanup only. Repeating historical DELETE queries every 15 min is costly in D1.
- const time=now(); const utc=new Date(time);
- if (utc.getUTCHours()===0 && utc.getUTCMinutes()===0) {
-  await env.DB.prepare('DELETE FROM oauth_states WHERE expires_at<?').bind(time).run();
-  await env.DB.prepare('DELETE FROM email_login_codes WHERE expires_at<?').bind(time).run();
-  await env.DB.prepare('DELETE FROM password_tokens WHERE expires_at<?').bind(time).run();
-  await env.DB.prepare('DELETE FROM password_mail_limits WHERE window_start<?').bind(time-2*86400000).run();
-  await env.DB.prepare('DELETE FROM sessions WHERE expires_at<?').bind(time).run();
-  await env.DB.prepare('DELETE FROM runs WHERE created_at<?').bind(time-90*86400000).run();
-  await env.DB.prepare('DELETE FROM audit_events WHERE occurred_at<?').bind(time-365*86400000).run();
+ const due=await env.DB.prepare("SELECT * FROM monitors WHERE state='active' AND verified_at IS NOT NULL AND next_due<=? AND (lock_until IS NULL OR lock_until<?) ORDER BY next_due LIMIT ?")
+  .bind(time,time,resourceLimits(env).checksPerTick).all<Monitor>();
+ for (const monitor of due.results) {
+  const result=await runMonitor(env,monitor,'scheduled',ctx);
+  // Ineligible or pending monitors must not permanently starve the due queue.
+  if (!result.accepted) await env.DB.prepare('UPDATE monitors SET next_due=? WHERE id=? AND next_due<=?')
+   .bind(time+900000,monitor.id,time).run();
  }
+ // Bounded maintenance batches on every tick: outages at midnight no longer skip
+ // a whole day's cleanup. At most one table/slot; no unbounded historical deletes.
+ const cleanup=[
+  ['oauth_states','expires_at',time],['email_login_codes','expires_at',time],
+  ['password_tokens','expires_at',time],['password_mail_limits','window_start',time-2*86400000],
+  ['sessions','expires_at',time],['runs','created_at',time-90*86400000],
+  ['audit_events','occurred_at',time-365*86400000],['run_usage','created_at',time-2*86400000],
+  ['usage_daily','day',new Date(time-90*86400000).toISOString().slice(0,10)],
+  ['resource_usage','day',new Date(time-90*86400000).toISOString().slice(0,10)]
+ ] as const;
+ const [table,column,cutoff]=cleanup[tick%cleanup.length];
+ await env.DB.prepare(`DELETE FROM ${table} WHERE rowid IN (SELECT rowid FROM ${table} WHERE ${column}<? LIMIT 100)`).bind(cutoff).run();
 }

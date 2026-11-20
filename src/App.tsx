@@ -8,7 +8,7 @@ const items=[['How it works','/how-it-works'],['Features','/features'],['Pricing
 function useSeo(path:string){
  useEffect(()=>{
   const meta=pageSeo(path);
-  document.title=meta?.title||(path==='/dashboard'?'Dashboard | LeadPath':path==='/account'?'Account settings | LeadPath':'Secure account access | LeadPath');
+  document.title=meta?.title||(path==='/dashboard'?'Dashboard | LeadPath':path==='/billing'?'Plan & billing | LeadPath':path==='/account'?'Account settings | LeadPath':'Secure account access | LeadPath');
   let canonical=document.querySelector('link[rel="canonical"]') as HTMLLinkElement|null;
   if(meta){
    if(!canonical){canonical=document.createElement('link');canonical.rel='canonical';document.head.appendChild(canonical);}
@@ -32,7 +32,7 @@ export default function App({initialPath}:{initialPath?:string}={}) {
  useSeo(route);
  useEffect(()=>{if(localStorage.getItem('leadpath_theme')==='light')setDark(false);},[]);
  useEffect(()=>{document.documentElement.dataset.theme=dark?'dark':'light';localStorage.setItem('leadpath_theme',dark?'dark':'light');},[dark]);
- const isApp=route==='/dashboard'||route==='/account';
+ const isApp=route==='/dashboard'||route==='/account'||route==='/billing';
  return <div className="app-shell">
   <header className="site-header"><div className="header-inner container">
    <a href="/" className="brand" aria-label="LeadPath home"><span className="brand-icon"><Activity size={19} strokeWidth={2.5}/></span><span>leadpath<span className="brand-period">.</span></span></a>

@@ -47,3 +47,12 @@ npx wrangler d1 export leadpath-db --remote --output="$HOME\leadpath-d1-backup.s
 ```
 
 Backups contain user and monitoring metadata. Keep securely offline and never commit them. D1 Time Travel and restore capabilities depend on the Cloudflare plan; do not assume unlimited retention.
+
+## Subscription-foundation branch (not deployed)
+
+See [the subscription audit](docs/subscription-audit.md) and [release runbook](docs/subscriptions.md).
+The proposed Starter/Pro tiers are disabled, all accounts remain effectively Free by default,
+and no active checkout or provider subscription mutation is exposed. The account UI may
+show future tiers as unavailable. These source changes do not establish production billing
+readiness; merchant onboarding, checkout/management implementation, real sandbox validation,
+capacity work and separate deployment/payment approval remain mandatory.

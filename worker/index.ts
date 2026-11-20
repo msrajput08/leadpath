@@ -6,6 +6,7 @@ import { socialStart, socialCallback } from './social.js';
 import { emailRequest, emailVerify } from './email-auth.js';
 import { passwordSignUp, passwordLogin, passwordVerifyEmail, passwordResend, passwordForgot, passwordReset } from './password-auth.js';
 import { confirmCallback, scheduled } from './engine.js';
+import { billingWebhook } from './billing/webhook.js';
 
 type Ctx = {waitUntil(promise:Promise<unknown>):void};
 function hardened(res:Response):Response {
@@ -53,6 +54,7 @@ export default {
    if (path==='/auth/logout' && req.method==='POST') return hardened(await authLogout(req,env));
    const cb=path.match(/^\/api\/callback\/([a-f0-9-]{36})$/);
    if (cb && req.method==='POST') return hardened(await confirmCallback(req,env,cb[1],ctx));
+   if (path==='/api/billing/webhooks/paddle' && req.method==='POST') return hardened(await billingWebhook(req,env));
    if (path.startsWith('/api/')) return hardened(await handleApi(req,env,ctx));
    return hardened(fail(404,'Not found'));
   } catch (error) {

@@ -19,6 +19,6 @@ export const PUBLIC_SEO:Record<string,SeoPage>={
  '/privacy':{title:'Privacy Policy — LeadPath Workflow Monitoring',description:'Read how LeadPath handles accounts, encrypted Make webhook URLs, synthetic run history, Supabase sign-in data and deletion requests.'},
  '/terms':{title:'Terms of Service — LeadPath',description:'Terms for authorized synthetic webhook monitoring, free-plan limits, acceptable use, availability and third-party Make and Google accounts.'}
 };
-export const PRIVATE_ROUTES=['/login','/signup','/forgot-password','/reset-password','/verify-email','/resend-verification','/dashboard','/account'] as const;
+export const PRIVATE_ROUTES=['/login','/signup','/forgot-password','/reset-password','/verify-email','/resend-verification','/dashboard','/billing','/account'] as const;
 export const PUBLIC_PATHS=Object.keys(PUBLIC_SEO);
 export function pageSeo(path:string):SeoPage|undefined{return PUBLIC_SEO[path];}

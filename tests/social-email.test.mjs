@@ -7,7 +7,7 @@ import {emailRequest,emailVerify} from '../.test-build/email-auth.js';
 
 function makeDb(){
  const raw=new DatabaseSync(':memory:');
- for(const name of ['0001_init.sql','0002_webhook_ownership.sql','0003_email_otp.sql']){
+ for(const name of ['0001_init.sql','0002_webhook_ownership.sql','0003_email_otp.sql','0004_password_auth.sql','0005_subscription_foundation.sql']){
   raw.exec(fs.readFileSync(new URL('../db/migrations/'+name,import.meta.url),'utf8'));
  }
  return {

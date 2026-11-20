@@ -35,7 +35,15 @@
     }
   ],
   "vars": {
-    "BASE_URL": "https://leadpath.monty-08-raj.workers.dev"
+    "BASE_URL": "https://leadpath.monty-08-raj.workers.dev",
+    "BILLING_MODE": "disabled",
+    "BILLING_WEBHOOKS_ENABLED": "false",
+    "BILLING_LIVE_APPROVED": "false",
+    "PAID_ENTITLEMENTS_ENABLED": "false",
+    "MONITOR_MIN_INTERVAL_SECONDS": "21600",
+    "SCHEDULER_BATCH_SIZE": "3",
+    "SCHEDULED_CHECKS_PER_DAY": "288",
+    "MANUAL_CHECKS_PER_DAY": "1000"
   },
   "previews": {
     "vars": {

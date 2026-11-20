@@ -10,6 +10,16 @@ export interface D1Database {
 }
 export interface Env {
  DB: D1Database;
+ PAID_ENTITLEMENTS_ENABLED?: string;
+ BILLING_MODE?: string;
+ BILLING_LIVE_APPROVED?: string;
+ BILLING_WEBHOOKS_ENABLED?: string;
+ PADDLE_API_KEY?: string;
+ PADDLE_WEBHOOK_SECRET?: string;
+ SCHEDULER_BATCH_SIZE?: string;
+ SCHEDULED_CHECKS_PER_DAY?: string;
+ MANUAL_CHECKS_PER_DAY?: string;
+ MONITOR_MIN_INTERVAL_SECONDS?: string;
  BASE_URL: string;
  GOOGLE_CLIENT_ID?: string;
  GOOGLE_CLIENT_SECRET?: string;
