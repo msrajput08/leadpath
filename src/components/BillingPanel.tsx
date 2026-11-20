@@ -1,4 +1,4 @@
-import React,{useEffect,useState} from 'react';
+import React,{useEffect,useRef,useState} from 'react';
 import {CheckCircle2,Clock3,ShieldCheck} from 'lucide-react';
 type Plan={code:string;display_name:string;currency:string;price_minor_units:number;monitor_limit:number;interval_seconds:number;operationally_available:boolean};
 const formatPrice=(plan:Plan)=>new Intl.NumberFormat('en-IN',{style:'currency',currency:plan.currency,maximumFractionDigits:0}).format(plan.price_minor_units/100);
@@ -13,6 +13,7 @@ export default function BillingPanel({compact=false,csrfToken}:{compact?:boolean
  const [sandboxMessage,setSandboxMessage]=useState('');
  const [liveBusy,setLiveBusy]=useState(false);
  const [liveStatus,setLiveStatus]=useState('');
+ const autoSynced=useRef(false);
  async function liveAction(path:string,body:unknown={}){
   setLiveBusy(true);setLiveStatus('');
   try{
@@ -57,6 +58,26 @@ export default function BillingPanel({compact=false,csrfToken}:{compact?:boolean
   }).then(data=>{if(live)setDetails(data);}).catch(e=>{if(live)setMessage(e.message);});
   return ()=>{live=false;};
  },[]);
+ useEffect(()=>{
+  if(!csrfToken||autoSynced.current||details?.subscription?.billing_mode!=='live'||
+     details.subscription.status!=='pending')return;
+  autoSynced.current=true;
+  let active=true;
+  // Hosted Razorpay checkout can return before webhook delivery. Reconcile
+  // the actual provider subscription once, without trusting URL parameters.
+  fetch('/api/billing/live/sync',{
+   method:'POST',credentials:'same-origin',
+   headers:{'Content-Type':'application/json','X-CSRF-Token':csrfToken},body:'{}'
+  }).then(async res=>{
+   if(!res.ok)throw new Error('Payment status is still being verified. You can refresh it below.');
+   const updated=await fetch('/api/billing',{credentials:'same-origin'});
+   if(!updated.ok)throw new Error('Subscription details are temporarily unavailable.');
+   if(active)setDetails(await updated.json());
+  }).catch(err=>{
+   if(active)setLiveStatus(err instanceof Error?err.message:'Payment status verification is pending.');
+  });
+  return()=>{active=false;};
+ },[csrfToken,details?.subscription?.billing_mode,details?.subscription?.status]);
  return <section className="panel dashboard-box subscription-panel" aria-labelledby="subscription-heading">
   <div className="box-header"><div><span className="eyebrow">SUBSCRIPTIONS</span><h2 id="subscription-heading">Plan & usage</h2></div><span className="subscription-soon">{details?.checkout_enabled?'INR subscriptions available':'Paid plans coming soon'}</span></div>
   {message&&<p className="small muted" role="status">{message}</p>}
