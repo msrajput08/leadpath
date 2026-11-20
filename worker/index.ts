@@ -31,7 +31,7 @@ export default {
            path==='/auth/facebook/start'||path==='/auth/facebook/callback'||
            path==='/auth/x/start'||path==='/auth/x/callback') && req.method==='GET')
          || ((path==='/auth/email/request'||path==='/auth/email/verify'||path.startsWith('/auth/password/')) && req.method==='POST')
-         || (path==='/api/public/status' && req.method==='GET')) && env.RATE_LIMITER) {
+         || ((path==='/api/public/status'||path==='/api/public/billing') && req.method==='GET')) && env.RATE_LIMITER) {
     const key=(path.startsWith('/auth/')?'auth:':'public-status:')+(req.headers.get('CF-Connecting-IP')||'anonymous');
     if (!(await env.RATE_LIMITER.limit({key})).success) return hardened(fail(429,'Rate limit reached. Try again shortly.'));
    }
