@@ -4,6 +4,7 @@ import { authStart, authCallback, authLogout, githubStart, githubCallback } from
 import { handleApi } from './api.js';
 import { socialStart, socialCallback } from './social.js';
 import { emailRequest, emailVerify } from './email-auth.js';
+import { passwordSignUp, passwordLogin, passwordVerifyEmail, passwordResend, passwordForgot, passwordReset } from './password-auth.js';
 import { confirmCallback, scheduled } from './engine.js';
 
 type Ctx = {waitUntil(promise:Promise<unknown>):void};
@@ -26,7 +27,7 @@ export default {
            path==='/auth/github/start'||path==='/auth/github/callback'||
            path==='/auth/facebook/start'||path==='/auth/facebook/callback'||
            path==='/auth/x/start'||path==='/auth/x/callback') && req.method==='GET')
-         || ((path==='/auth/email/request'||path==='/auth/email/verify') && req.method==='POST')
+         || ((path==='/auth/email/request'||path==='/auth/email/verify'||path.startsWith('/auth/password/')) && req.method==='POST')
          || (path==='/api/public/status' && req.method==='GET')) && env.RATE_LIMITER) {
     const key=(path.startsWith('/auth/')?'auth:':'public-status:')+(req.headers.get('CF-Connecting-IP')||'anonymous');
     if (!(await env.RATE_LIMITER.limit({key})).success) return hardened(fail(429,'Rate limit reached. Try again shortly.'));
@@ -41,6 +42,14 @@ export default {
    if (path==='/auth/x/callback' && req.method==='GET') return hardened(await socialCallback(req,env,'x'));
    if (path==='/auth/email/request' && req.method==='POST') return hardened(await emailRequest(req,env));
    if (path==='/auth/email/verify' && req.method==='POST') return hardened(await emailVerify(req,env));
+   if (req.method==='POST') {
+    if(path==='/auth/password/signup')return hardened(await passwordSignUp(req,env));
+    if(path==='/auth/password/login')return hardened(await passwordLogin(req,env));
+    if(path==='/auth/password/verify')return hardened(await passwordVerifyEmail(req,env));
+    if(path==='/auth/password/resend')return hardened(await passwordResend(req,env));
+    if(path==='/auth/password/forgot')return hardened(await passwordForgot(req,env));
+    if(path==='/auth/password/reset')return hardened(await passwordReset(req,env));
+   }
    if (path==='/auth/logout' && req.method==='POST') return hardened(await authLogout(req,env));
    const cb=path.match(/^\/api\/callback\/([a-f0-9-]{36})$/);
    if (cb && req.method==='POST') return hardened(await confirmCallback(req,env,cb[1],ctx));

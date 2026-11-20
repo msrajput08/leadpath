@@ -19,3 +19,10 @@ RESEND_API_KEY=
 EMAIL_FROM_ADDRESS=
 # Generate a unique 32-byte key, 64 hex characters; do not reuse webhook key.
 EMAIL_OTP_SECRET=
+
+# Email/password + Brevo HTTPS API; sender must be verified for transactional emails.
+BREVO_API_KEY=
+BREVO_SENDER_EMAIL=
+BREVO_SENDER_NAME=LeadPath
+# Legacy one-time-code login is off by default.
+ENABLE_EMAIL_OTP=false

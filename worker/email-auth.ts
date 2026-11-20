@@ -4,7 +4,7 @@ import { newRandomString, constantTimeEqual, secureCookie, sha256 } from './secu
 
 const encoder=new TextEncoder();
 const local=(env:Env)=>new URL(env.BASE_URL).protocol==='http:'&&new URL(env.BASE_URL).hostname==='localhost';
-const emailReady=(env:Env)=>!!(env.RESEND_API_KEY&&env.EMAIL_FROM_ADDRESS&&/^[a-fA-F0-9]{64}$/.test(env.EMAIL_OTP_SECRET||''));
+const emailReady=(env:Env)=>!!(env.ENABLE_EMAIL_OTP==='true'&&env.RESEND_API_KEY&&env.EMAIL_FROM_ADDRESS&&/^[a-fA-F0-9]{64}$/.test(env.EMAIL_OTP_SECRET||''));
 export const emailLoginConfigured=emailReady;
 function normalize(value:unknown):string|null {
  if(typeof value!=='string')return null;

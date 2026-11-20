@@ -91,7 +91,7 @@ test('X: PKCE and Basic token exchange, creates non-email identity without guess
  }finally{globalThis.fetch=original;DB.raw.close();}
 });
 test('Email: hashed OTP, 60-second send cooldown, wrong-code rejection and single-use login',async()=>{
- const DB=makeDb(),env={DB,BASE_URL:base,EMAIL_OTP_SECRET:'e'.repeat(64),
+ const DB=makeDb(),env={DB,BASE_URL:base,ENABLE_EMAIL_OTP:'true',EMAIL_OTP_SECRET:'e'.repeat(64),
   RESEND_API_KEY:'re_test',EMAIL_FROM_ADDRESS:'LeadPath <login@example.test>'};
  let deliveredCode='',calls=0;
  const original=globalThis.fetch;
@@ -121,7 +121,7 @@ test('Email: hashed OTP, 60-second send cooldown, wrong-code rejection and singl
  }finally{globalThis.fetch=original;DB.raw.close();}
 });
 test('Email: no service credentials means no email login; failed delivery never leaves usable code',async()=>{
- const DB=makeDb(),env={DB,BASE_URL:base,EMAIL_OTP_SECRET:'a'.repeat(64),
+ const DB=makeDb(),env={DB,BASE_URL:base,ENABLE_EMAIL_OTP:'true',EMAIL_OTP_SECRET:'a'.repeat(64),
   RESEND_API_KEY:'re_bad',EMAIL_FROM_ADDRESS:'login@example.test'};
  const original=globalThis.fetch;
  globalThis.fetch=async()=>new Response('service error',{status:500});
