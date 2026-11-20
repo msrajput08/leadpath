@@ -30,6 +30,10 @@ export interface Env {
  EMAIL_OTP_SECRET?: string;
  WEBHOOK_ENCRYPTION_KEY?: string;
  TELEGRAM_BOT_TOKEN?: string;
+ PAID_ENTITLEMENTS_ENABLED?: string;
+ BILLING_WEBHOOKS_ENABLED?: string;
+ RAZORPAY_WEBHOOK_SECRET?: string;
+ SCHEDULE_BATCH_LIMIT?: string;
  RATE_LIMITER?: {limit(input:{key:string}):Promise<{success:boolean}>};
 }
 export interface Monitor {
