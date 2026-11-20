@@ -113,7 +113,7 @@ test('public pages have canonical URLs while auth and private routes explicitly 
  await page.goto('/contact');
  await expect(page.locator('meta[name="robots"]')).toHaveAttribute('content','index, follow');
  await expect(page.locator('link[rel="canonical"]')).toHaveAttribute('href','https://leadpath.monty-08-raj.workers.dev/contact');
- await expect(page.locator('meta[name="description"]')).toHaveAttribute('content',/Contact LeadPath support/i);
+ await expect(page.locator('meta[name="description"]')).toHaveAttribute('content',/Get help with your LeadPath account/i);
  await page.goto('/signup');
  await expect(page.locator('meta[name="robots"]')).toHaveAttribute('content','noindex, nofollow');
  await page.goto('/reset-password');
