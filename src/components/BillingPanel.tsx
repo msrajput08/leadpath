@@ -62,19 +62,19 @@ export default function BillingPanel({compact=false,csrfToken}:{compact?:boolean
   {message&&<p className="small muted" role="status">{message}</p>}
   {details&&<>
    <div className="subscription-summary">
-    <div><span className="small muted">CURRENT PLAN</span><strong>{details.current.display_name}</strong><small>{formatPrice(details.current)}/month · No payment method required</small></div>
+    <div><span className="small muted">CURRENT PLAN</span><strong>{details.current.display_name}</strong><small>{formatPrice(details.current)}/month{details.current.code==='free'?' · No payment method required':' · Razorpay recurring subscription'}</small></div>
     <div><span className="small muted">MONITORS</span><strong>{details.monitor_count} / {details.current.monitor_limit}</strong><small>Saved workflows</small></div>
     <div><span className="small muted">THIS MONTH (UTC)</span><strong>{details.usage.scheduled_checks+details.usage.manual_checks}</strong><small>{details.usage.scheduled_checks} automatic · {details.usage.manual_checks} manual</small></div>
    </div>
    {details.subscription&&<p className="small muted">Billing record: {details.subscription.status}.
     {details.subscription.current_period_end?' Period ends '+new Date(details.subscription.current_period_end).toLocaleDateString()+'.':''}
     {details.subscription.cancel_at_period_end?' Cancellation scheduled.':''}
-    No checkout or self-service cancellation is currently enabled.</p>}
+    {details.subscription.billing_mode==='live'?' Use the controls below to refresh payment status or cancel future renewals.':' Sandbox authorization does not activate paid monitoring.'}</p>}
    {!compact&&<div className="subscription-comparison">{details.plans.map(p=><div className="subscription-tier" key={p.code}>
-    <span className="small muted">{p.code==='free'?'AVAILABLE NOW':details.checkout_enabled?'MONTHLY · INDIA ONLY':'PROPOSED · NOT FOR SALE'}</span>
+    <span className="small muted">{p.code==='free'?'AVAILABLE NOW':details.checkout_enabled?'LIMITED PAID PILOT · INDIA ONLY':'PROPOSED · NOT FOR SALE'}</span>
     <h3>{p.display_name}</h3><strong className="subscription-price">{formatPrice(p)}<small> /month</small></strong>
     <p className="small">{p.monitor_limit} monitor{p.monitor_limit===1?'':'s'} · target every {p.interval_seconds===21600?'6 hours':p.interval_seconds===3600?'hour':'15 minutes'}</p>
-    <span className="small muted">{p.code==='free'?<><CheckCircle2 size={14}/> Current service</>:<><Clock3 size={14}/> Frequency, alerts and billing pending validation</>}</span>
+    <span className="small muted">{p.code==='free'?<><CheckCircle2 size={14}/> Current service</>:<><Clock3 size={14}/> {details.checkout_enabled?'Paid monitoring · best-effort schedules':'Frequency and billing pending validation'}</>}</span>
    </div>)}</div>}
    {(details.checkout_enabled||details.subscription?.billing_mode==='live')&&csrfToken&&<div className="sandbox-controls">
     <h3>{details.subscription?.billing_mode==='live'?'Manage your live subscription':'Choose your monthly subscription'}</h3>
