@@ -143,7 +143,7 @@ test('live and test webhooks cannot cross-grant payment access',async()=>{
    .bind(crypto.randomUUID(),who.userId,subId,t+86400000,t,t).run();
   const event={event:'subscription.activated',created_at:Math.floor(Date.now()/1000),payload:{
    subscription:{entity:{id:subId,plan_id:'plan_StarterLive2026',
-    status:'active',current_start:Math.floor(Date.now()/1000)-50,current_end:Math.floor(Date.now()/1000)+86400}}}};
+    status:'active',paid_count:1,current_start:Math.floor(Date.now()/1000)-50,current_end:Math.floor(Date.now()/1000)+86400}}}};
   async function fire(mode,secret,eventId){
    const body=JSON.stringify(event),sig=await signature(secret,body);
    return razorpayWebhook(new Request(base+'/api/billing/webhook/razorpay'+(mode==='live'?'-live':''),{
@@ -152,11 +152,16 @@ test('live and test webhooks cannot cross-grant payment access',async()=>{
   assert.equal((await fire('test',env.RAZORPAY_LIVE_WEBHOOK_SECRET,'evt_testwrong')).status,503,
    'test webhook is disabled without its separate flag');
   assert.equal((await fire('live','bad-secret','evt_badlive')).status,401);
+  event.payload.subscription.entity.paid_count=0;
+  assert.equal((await fire('live',env.RAZORPAY_LIVE_WEBHOOK_SECRET,'evt_nocharge')).status,200);
+  assert.equal((await getEntitlements(env,who.userId)).code,'free','subscription mandate without a paid cycle is not entitlement');
+  event.payload.subscription.entity.paid_count=1;
+  event.created_at+=1;
   assert.equal((await fire('live',env.RAZORPAY_LIVE_WEBHOOK_SECRET,'evt_livegood')).status,200);
   assert.equal((await getEntitlements(env,who.userId)).code,'starter');
   assert.equal((await fire('live',env.RAZORPAY_LIVE_WEBHOOK_SECRET,'evt_livegood')).status,200,'replay idempotent');
   const events=await DB.prepare('SELECT COUNT(*) c FROM payment_events').first();
-  assert.equal(events.c,1);
+  assert.equal(events.c,2);
  }finally{globalThis.fetch=original;DB.sql.close();}
 });
 
