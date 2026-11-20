@@ -12,7 +12,7 @@ const base='https://leadpath.example';
 const ctx={waitUntil(p){p.catch(()=>{});}};
 function makeDb(withBilling=true){
  const sql=new DatabaseSync(':memory:');
- for(const file of ['0001_init.sql','0002_webhook_ownership.sql',...(withBilling?['0005_subscription_foundation.sql']:[])])
+ for(const file of ['0001_init.sql','0002_webhook_ownership.sql',...(withBilling?['0005_subscription_foundation.sql','0006_test_checkout_locks.sql','0007_live_billing_mode.sql']:[])])
   sql.exec(fs.readFileSync(new URL('../db/migrations/'+file,import.meta.url),'utf8'));
  return {sql,
   prepare(s){return {sql:s,args:[],bind(...args){this.args=args;return this;},
@@ -68,7 +68,7 @@ test('additive D1 migration keeps original monitor and runs, permits controlled 
 });
 test('Free is fail-closed, verified webhook alone does not activate payments, expiry and downgrades preserve monitors',async()=>{
  const DB=makeDb(),a=await account(DB),subId='sub_test123456',t=Date.now();
- const env={DB,BASE_URL:base,WEBHOOK_ENCRYPTION_KEY:'a'.repeat(64),RAZORPAY_WEBHOOK_SECRET:'staging-only-webhook-secret',BILLING_WEBHOOKS_ENABLED:'true',PAID_ENTITLEMENTS_ENABLED:'true'};
+ const env={DB,BASE_URL:base,WEBHOOK_ENCRYPTION_KEY:'a'.repeat(64),RAZORPAY_WEBHOOK_SECRET:'staging-only-webhook-secret',BILLING_WEBHOOKS_ENABLED:'true',PAID_ENTITLEMENTS_ENABLED:'true',ALLOW_TEST_BILLING_ENTITLEMENTS:'true'};
  try{
   const newMonitor=(n)=>handleApi(request('/api/monitors','POST',{name:'Monitor '+n,webhook_url:'https://hook.eu1.make.com/TestWebhook123',authorized:true},a),env,ctx);
   assert.equal((await getEntitlements(env,a.userId)).code,'free');
@@ -127,7 +127,7 @@ test('Free is fail-closed, verified webhook alone does not activate payments, ex
 });
 test('scheduled cadence derives from server entitlements; same monitor cannot be claimed twice',async()=>{
  const DB=makeDb(),a=await account(DB),now=Date.now(),subId='sub_scheduled123';
- const env={DB,BASE_URL:base,WEBHOOK_ENCRYPTION_KEY:'9'.repeat(64),PAID_ENTITLEMENTS_ENABLED:'true'};
+ const env={DB,BASE_URL:base,WEBHOOK_ENCRYPTION_KEY:'9'.repeat(64),PAID_ENTITLEMENTS_ENABLED:'true',ALLOW_TEST_BILLING_ENTITLEMENTS:'true'};
  const originalFetch=globalThis.fetch;
  globalThis.fetch=async()=>new Response('accepted',{status:200});
  try{
