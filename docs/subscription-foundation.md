@@ -77,6 +77,24 @@ Assume **every user has one active, verified Free monitor**, no premium users, e
 
 Current incremental **fixed** infrastructure expense is $0/month for the untouched free deployment (assuming existing vendor free allowances). The working code is **not** able to satisfy these populations at the advertised cadence. Actual cost cannot be assigned without D1 row-metrics, CPU profiling, batch benchmarks, response volumes, retention bytes, retries, traffic, user mix, provider notification fees, and Make credit consumption. Under paid infrastructure the recurring baseline starts at the published $5/month Workers minimum; the total may be materially higher. Subscription fees are transaction-variable and only start after approved checkout.
 
+
+## Razorpay TEST-mode checkout foundation (separate from paid launch)
+
+A sandbox-only checkout flow now lives behind **RAZORPAY_SANDBOX_ENABLED=true** plus `RAZORPAY_TEST_KEY_ID`, `RAZORPAY_TEST_KEY_SECRET`, `RAZORPAY_TEST_STARTER_PLAN_ID` and `RAZORPAY_TEST_PRO_PLAN_ID`. The server rejects keys that do not start with `rzp_test_`. **No live Razorpay key is used by these endpoints**, and these flags are off by default.
+
+The backend fetches the Razorpay test plan and verifies its amount in INR paise, INR currency and one-month recurring interval against the local D1 catalog before creating a sandbox subscription. A D1 lock reduces duplicate requests; a server-created provider subscription ID is bound to the authenticated user. Hosted checkout URLs are validated against `https://rzp.io` before being shown. The account UI reveals testing controls only when sandbox configuration is explicitly enabled. Access remains Free regardless of successful test authorization.
+
+Authenticated endpoints (existing session and same-origin CSRF required):
+- `POST /api/billing/sandbox/create` — payload `{"plan_code":"starter"|"pro"}`; returns hosted TEST checkout.
+- `POST /api/billing/sandbox/verify` — validates Razorpay's returned `razorpay_payment_id|server-stored subscription_id` HMAC-SHA256; deliberately **does not** activate entitlements.
+- `POST /api/billing/sandbox/cancel` — requests `cancel_at_cycle_end=true` using TEST credentials only, then waits for verified lifecycle updates.
+
+**Important:** Setup a separate Razorpay **Test Mode** account context and its own `RAZORPAY_WEBHOOK_SECRET` for staging; the current webhook gate is disabled by default. This is engineering verification code; it has not contacted a real merchant Razorpay account. The 12-cycle test subscription expires after 12 monthly renewals; lifecycle behavior and maximum duration must be approved before live use. Razorpay API calls are never made during CI; all gateway operations are mocked.
+
+Caveat: when the gateway accepts a create but the network response is lost, a local lock remains for 30 minutes. Manual provider-side reconciliation is required before creating another test subscription. Production would require persistent reconciliation and risk review rather than relying solely on the lock.
+
+Official sources: [Create subscription](https://razorpay.com/docs/api/payments/subscriptions/create-subscription/), [Cancel subscription](https://razorpay.com/docs/api/payments/subscriptions/cancel-subscription/), [Razorpay integration guide](https://razorpay.com/docs/payments/subscriptions/integration-guide/).
+
 ## Verification matrix and remaining launch blockers
 
 CI is configured to run worker typecheck, JS/SQLite integration, Vitest, frontend build/prerender, production-dependency audit, **local-only** D1 migration, and Playwright smoke tests. Interpret GitHub Actions results in this PR—not a preview deployment—as the source of test outcome. Production, provider sandbox and actual Cloudflare load are **not** covered by the local suite.
