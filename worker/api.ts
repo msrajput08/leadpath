@@ -50,7 +50,8 @@ export async function handleApi(req:Request,env:Env,ctx:Context):Promise<Respons
  if (pathname==='/api/billing' && req.method==='GET') return json(await billingOverview(env,userId));
  if (pathname==='/api/monitors' && req.method==='GET') {
   const result=await env.DB.prepare('SELECT * FROM monitors WHERE user_id=? ORDER BY created_at DESC').bind(userId).all<Record<string,unknown>>();
-  return json({monitors:result.results.map(publicMonitor)});
+  const plan=await getEntitlements(env,userId);
+  return json({monitors:result.results.map(row=>({...publicMonitor(row),interval_seconds:plan.interval_seconds}))});
  }
  if (pathname==='/api/monitors' && req.method==='POST') {
   const form=await readSmallJson(req);
