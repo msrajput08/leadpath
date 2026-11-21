@@ -106,10 +106,12 @@ export default function BillingPanel({compact=false,csrfToken}:{compact?:boolean
      {details.checkout_enabled&&details.live_pilot_plan!=='starter'&&<button type="button" className="btn btn-secondary" disabled={liveBusy||(details.subscription?.billing_mode==='live'&&['pending','active','past_due'].includes(details.subscription.status))}
       onClick={()=>liveAction('/api/billing/live/create',{plan_code:'pro'})}>Subscribe to Pro · ₹2,499/mo</button>}
      {details.subscription?.billing_mode==='live'&&<>
+      {details.subscription.status==='pending'&&<button type="button" className="btn btn-primary" disabled={liveBusy}
+       onClick={()=>liveAction('/api/billing/live/resume')}>Continue secure checkout</button>}
       <button type="button" className="btn btn-secondary" disabled={liveBusy}
        onClick={()=>liveAction('/api/billing/live/sync')}>Refresh payment status</button>
       <button type="button" className="btn btn-secondary" disabled={liveBusy}
-       onClick={()=>{if(window.confirm('Cancel future Razorpay renewals for this subscription?'))void liveAction('/api/billing/live/cancel');}}>Cancel future renewals</button>
+       onClick={()=>{if(window.confirm(details.subscription?.status==='pending'?'Cancel this unfinished Razorpay subscription?':'Cancel future Razorpay renewals for this subscription?'))void liveAction('/api/billing/live/cancel');}}>{details.subscription.status==='pending'?'Cancel unfinished checkout':'Cancel future renewals'}</button>
      </>}
     </div>
     {liveStatus&&<p className="small" role="status" aria-live="polite">{liveStatus}</p>}
