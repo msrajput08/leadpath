@@ -49,6 +49,8 @@ export interface Env {
  LIVE_CAPACITY_REVIEWED?: string;
  LIVE_MAX_PAID_ACCOUNTS?: string;
  LIVE_PILOT_PLAN?: string;
+ LIVE_PILOT_USER_ID?: string;
+ LIVE_PILOT_OPEN_TO_PUBLIC?: string;
  ALLOW_TEST_BILLING_ENTITLEMENTS?: string;
  MONITOR_QUEUE?: {sendBatch(messages:{body:{monitor_id?:string;kind?:'sweep';enqueued_at:number}}[]):Promise<void>};
  RATE_LIMITER?: {limit(input:{key:string}):Promise<{success:boolean}>};
