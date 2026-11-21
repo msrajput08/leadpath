@@ -123,7 +123,13 @@ export async function createLiveSubscription(env:Env,userId:string,req:Request):
     WHERE EXISTS(SELECT 1 FROM billing_creation_locks WHERE user_id=? AND nonce=?)`)
     .bind(crypto.randomUUID(),userId,code,created.id,time,time,userId,nonce),
    env.DB.prepare('UPDATE live_billing_slots SET provider_subscription_id=?,updated_at=? WHERE user_id=? AND provider_subscription_id IS NULL')
-    .bind(created.id,time,userId)
+    .bind(created.id,time,userId),
+   // Mapping is now durable; future retries are protected by the existing
+   // pending subscription + live slot instead of an unnecessary 30-minute lock.
+   env.DB.prepare(`DELETE FROM billing_creation_locks WHERE user_id=? AND nonce=?
+    AND EXISTS(SELECT 1 FROM user_subscriptions
+     WHERE user_id=? AND provider_subscription_id=? AND billing_mode='live')`)
+    .bind(userId,nonce,userId,created.id)
   ]);
  }catch{return fail(502,'Provider accepted subscription but local setup requires support reconciliation. Do not retry.');}
  return json({mode:'live',plan_code:code,checkout_url:created.short_url,
