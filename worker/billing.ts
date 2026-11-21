@@ -1,5 +1,6 @@
 import type {Env} from './types.js';
 import {json} from './util.js';
+import {alignMonitorCadence} from './plan-schedule.js';
 
 type ProviderUpdate={provider:'razorpay';eventId:string;eventType:string;subscriptionId:string|null;
  status:'pending'|'active'|'past_due'|'cancelled'|'expired'|null;
@@ -121,5 +122,21 @@ export async function razorpayWebhook(req:Request,env:Env,mode:'test'|'live'='te
     .bind(update.subscriptionId,update.subscriptionId)]:[])
  ];
  await env.DB.batch(batch);
+ if(mode==='live'&&update.status&&update.subscriptionId){
+  // Signed, in-order events can grant/revoke the entitlement of an existing
+  // server-created subscription only. The query checks final persisted status
+  // rather than trusting a replayed or delayed event.
+  try{
+   const record=await env.DB.prepare(`SELECT user_id,plan_code,status,current_period_end
+    FROM user_subscriptions WHERE provider_subscription_id=? AND billing_mode='live'`)
+    .bind(update.subscriptionId).first<{user_id:string;plan_code:string;status:string;current_period_end:number|null}>();
+   if(record){
+    const paid=env.PAID_ENTITLEMENTS_ENABLED==='true'&&record.status==='active'&&
+     record.current_period_end!==null&&record.current_period_end>Date.now();
+    const target=paid?(record.plan_code==='starter'?3600:900):21600;
+    await alignMonitorCadence(env,record.user_id,target);
+   }
+  }catch{console.error('LeadPath webhook cadence reconciliation failed');}
+ }
  return json({ok:true});
 }
