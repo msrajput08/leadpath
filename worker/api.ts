@@ -6,7 +6,7 @@ import { emailLoginConfigured } from './email-auth.js';
 import { passwordAuthConfigured } from './password-auth.js';
 import { getEntitlements, billingOverview } from './entitlements.js';
 import { sandboxCreateSubscription,sandboxCancelSubscription,sandboxVerifyCheckout } from './razorpay-test.js';
-import {createLiveSubscription,cancelLiveSubscription,confirmLiveCheckout,syncLiveSubscription,resumeLiveCheckout,liveCheckoutReady} from './razorpay-live.js';
+import {createLiveSubscription,cancelLiveSubscription,confirmLiveCheckout,syncLiveSubscription,resumeLiveCheckout,liveCheckoutReady,pilotCanEnroll} from './razorpay-live.js';
 
 type Context = { waitUntil(promise: Promise<unknown>): void };
 const isId=(value:string)=>/^[0-9a-f-]{36}$/.test(value);
@@ -46,7 +46,7 @@ export async function handleApi(req:Request,env:Env,ctx:Context):Promise<Respons
  if(pathname==='/api/public/billing' && req.method==='GET'){
   // Public, low-detail commerce availability; never expose API keys, customer data or slots.
   let pilotAvailable=false;
-  if(liveCheckoutReady(env)&&env.DB){
+  if(liveCheckoutReady(env)&&pilotCanEnroll(env)&&env.DB){
    try {
     const slots=await env.DB.prepare('SELECT COUNT(*) AS total FROM live_billing_slots').first<{total:number}>();
     pilotAvailable=(slots?.total??Infinity)<1;
