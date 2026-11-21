@@ -115,6 +115,38 @@ Cloudflare Queues became available on Workers Free in February 2026 with **10,00
 
 Queue operations for a single Starter user with five hourly monitors are roughly **120 monitor messages/day** (write, read, delete operations) plus a sweep job every 15 minutes, subject to retries and other queue activity. This is below the published Free included operations in isolation but must be monitored. References: [Queues Free release](https://developers.cloudflare.com/changelog/post/2026-02-04-queues-free-plan/), [Queues pricing](https://developers.cloudflare.com/queues/platform/pricing/), [Queues limits](https://developers.cloudflare.com/queues/platform/limits/).
 
+### Owner-only first LIVE payment with one guarded command
+
+The initial production checkout is **private**. With `LIVE_PILOT_USER_ID` set and `LIVE_PILOT_OPEN_TO_PUBLIC=false`, only that existing signed-in LeadPath account can start a new real ₹799/month Starter subscription. Public /pricing reports Starter enrollment closed; other accounts receive a server-side 403 even if they bypass the UI. Only one global pilot slot is supported. Pro subscription creation remains 403. Existing live subscriptions can sync/resume/cancel after new enrollment is paused.
+
+After a reviewed branch CI pass, production D1 migration, real Make → Google Sheets callback, signed Test Mode webhook and representative **five-monitor capacity review** (actual Queue delivery, no overdue backlog and acceptable Free-plan limits), the Cloudflare account owner can use one terminal command:
+
+```powershell
+git pull --ff-only origin feat/subscription-foundation-20261120
+npm run live:pilot:launch
+```
+
+The launch command itself:
+1. Fails closed unless the checked-out branch, clean tracked files, the exact ignored LeadPath production config, verified D1 UUID, Queue producer/consumer bindings, Razorpay Live secret names and plan catalog are correct. Rejects a test-entitlement flag, existing live mandates/slots or a 30-minute-old overdue monitor backlog.
+2. Prompts for **one existing LeadPath account email**, locates exactly one matching D1 user ID without logging the private address, and asks for an **explicit recurring-billing/capacity approval phrase**. Without it, no write or deploy occurs. Do not falsely attest to tests not performed.
+3. Builds and deploys the current feature-branch Worker to the existing `leadpath` host; billing still OFF. Bulk updates only the explicit pilot flags with `LIVE_BILLING_ENABLED=false`, leaves Razorpay credential values untouched, and checks unsigned webhook rejection (HTTP 401).
+4. Enables `LIVE_BILLING_ENABLED=true` **as the final independent operation** and confirms that public checkout is still closed. If the final availability check fails, attempts to immediately pause checkout.
+5. **Does not initiate a payment.** The approved account owner must log in and explicitly authorize ₹799/month on Razorpay. Inspect the Razorpay provider-origin signed webhook delivery, LeadPath active paid entitlement, hourly monitoring schedule, and cancel behavior before inviting another account.
+
+Emergency pause (new checkout only; DOES NOT cancel existing recurring Razorpay mandates):
+
+```powershell
+npm run live:pilot:pause
+```
+
+Read-only check, no deployments or charges:
+
+```powershell
+npm run live:pilot:check
+```
+
+The first completed real transaction is itself the signed LIVE webhook test. Earlier mocked test events and a rejected forgery do not demonstrate real gateway delivery. A completed Live transaction charges real money; treat it as a legitimate subscription with appropriate invoices, cancellation and refund obligations. Do not call this a worldwide or publicly scalable launch. Live configuration cannot be changed via the connected GitHub repository alone; the Cloudflare operator must execute the guarded command. The operator should review any pending cancelled/abandoned Razorpay mandates in their dashboard if a test cannot finish.
+
 ## Razorpay TEST-mode checkout foundation (separate from paid launch)
 
 A sandbox-only checkout flow now lives behind **RAZORPAY_SANDBOX_ENABLED=true** plus `RAZORPAY_TEST_KEY_ID`, `RAZORPAY_TEST_KEY_SECRET`, `RAZORPAY_TEST_STARTER_PLAN_ID` and `RAZORPAY_TEST_PRO_PLAN_ID`. The server rejects keys that do not start with `rzp_test_`. **No live Razorpay key is used by these endpoints**, and these flags are off by default.
