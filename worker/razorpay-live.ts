@@ -1,5 +1,6 @@
 import type {Env} from './types.js';
 import {json,fail,readSmallJson} from './util.js';
+import {alignMonitorCadence} from './plan-schedule.js';
 
 type LivePlan='starter'|'pro';
 type PlanRow={currency:string;price_minor_units:number;interval_seconds:number};
@@ -176,6 +177,11 @@ export async function syncLiveSubscription(env:Env,userId:string):Promise<Respon
   WHERE user_id=? AND provider_subscription_id=? AND billing_mode='live'`)
   .bind(normalized.status,normalized.start,normalized.end,normalized.cancel?1:0,t,t,
    userId,record.provider_subscription_id).run();
+ // Reflect the newly verified paid cadence for existing monitors immediately.
+ // Keep external provider sync authoritative even if a noncritical cadence update fails.
+ await alignMonitorCadence(env,userId,normalized.status==='active'&&env.PAID_ENTITLEMENTS_ENABLED==='true'
+  ?(record.plan_code==='starter'?3600:900):21600)
+  .catch(()=>console.error('LeadPath live cadence reconciliation failed'));
  if(normalized.status==='cancelled'||normalized.status==='expired')
   await env.DB.prepare('DELETE FROM live_billing_slots WHERE user_id=? AND provider_subscription_id=?')
    .bind(userId,record.provider_subscription_id).run();
