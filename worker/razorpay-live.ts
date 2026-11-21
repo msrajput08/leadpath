@@ -62,8 +62,14 @@ async function validatedPlan(env:Env,code:LivePlan):Promise<{providerId:string;r
   return fail(503,'Razorpay Live plan amount/currency/period mismatch. Payments remain disabled for this plan.');
  return {providerId,row};
 }
+export function pilotCanEnroll(env:Env,userId?:string):boolean{
+ const allowed=env.LIVE_PILOT_USER_ID;
+ if(!allowed)return true; // Existing deployments may have an unrestricted 1-account cap.
+ return env.LIVE_PILOT_OPEN_TO_PUBLIC==='true'||userId===allowed;
+}
 export async function createLiveSubscription(env:Env,userId:string,req:Request):Promise<Response>{
  if(!liveCheckoutReady(env))return fail(503,'Live billing is not enabled or monitoring capacity was not approved.');
+ if(!pilotCanEnroll(env,userId))return fail(403,'Private Starter pilot enrollment is not open for this account.');
  const body=await readSmallJson(req),code=body.plan_code;
  if(code!=='starter'&&code!=='pro')return fail(400,'Choose Starter or Pro.');
  if(code!=='starter')return fail(403,'Pro subscriptions are not available in the limited launch.');
