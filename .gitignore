@@ -10,3 +10,6 @@ coverage/
 playwright-report/
 .test-build/
 backups/
+wrangler.staging.jsonc
+wrangler.live.local.jsonc
+wrangler.live.preflight.tmp.jsonc

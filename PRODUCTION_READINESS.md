@@ -6,13 +6,15 @@
 
 - Support email `minty.12.shar@gmail.com` on public Contact page and footer.
 - Privacy/Terms describe actual account data, D1, Supabase Auth, Brevo SMTP, OAuth, Make synthetic events, known deletion boundaries, 90-day run retention and 365-day audit retention. **Professional legal review and operator identity are still required before unrestricted commercial rollout.**
-- Pricing lists **only the available Free plan**, no invented paid plan values or unused checkout.
+- Pricing lists a generally available Free plan, a server-gated ₹799/month one-account India-only Starter pilot and a clearly unavailable proposed Pro tier. Checkout buttons are hidden unless backend billing gates and pilot capacity permit new enrollment.
 - Public routes have canonical descriptions; private/auth routes opt out of indexing.
 - Authentication, email verification and recovery, callback authorization, CSRF, encryption, rate limiting and migration checks are tested with simulated providers and local Worker browser sessions.
 - Site uses only synthetic test records (no real customer submissions).
 - GitHub CI stays the merge gate and runs actual browser tests. Preserve test fixtures; they are NOT mock marketing claims.
 
 ## Actual launch checks still requiring operator or independent live verification
+
+**Latest observed operator report:** Queue was configured/deployed and read-only operational checks were reported passing. This does **not** demonstrate a successfully delivered real Razorpay-signed event or a measured five-monitor recurring workload. Keep `LIVE_BILLING_ENABLED` and `LIVE_CAPACITY_REVIEWED` off until the provider-origin event and scheduled job capacity evidence are available. No additional user commands are required for this repository-only UI release.
 
 1. Confirm the exact deployed commit in Cloudflare and conduct a fresh real email/signup/login/reset/OAuth smoke test.
 2. Verify a real Make webhook → Sheets row → matching callback, a missing callback timeout, recovery alert and Cron run after the browser closes on the **new release**.
@@ -26,10 +28,10 @@
 
 ## Known product limits
 
-- One active or paused Make → Google Sheets monitor per LeadPath account; not a full website-form-to-CRM trace.
-- Six-hour check interval is a target; the runtime and third-party quotas can delay runs.
+- One active or paused Make → Google Sheets monitor on Free; optional Starter pilot allows up to five when real paid access is provider-verified. Not a full website-form-to-CRM trace.
+- Six-hour Free checks and hourly Starter pilot checks are targets; the runtime, Free Queues and third-party quotas can delay runs.
 - Confirmation relies on configuring the authenticated HTTP callback **after** the Google Sheets write.
-- No paid billing, advertised SLA or guarantee that every lost lead will be detected.
+- Razorpay Live subscription implementation and separate signed webhook are present. **Real checkout remains disabled** until external signed delivery and actual Free-plan Queue/monitoring capacity are verified; no advertised SLA or guarantee that every lost lead will be detected.
 - Cloudflare's free Workers rate limiting is per edge location and does not replace layered abuse defenses.
 
 ## Release/rollback

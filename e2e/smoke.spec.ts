@@ -101,13 +101,16 @@ test('public Contact, Privacy and Terms pages have useful live content instead o
  await expect(page.getByRole('heading',{name:/Availability and limits/i})).toBeVisible();
  await expect(page.getByText(/provisional template/i)).toHaveCount(0);
 });
-test('pricing only shows the actually available free product, and no invented upgrade tiers',async({page})=>{
+test('pricing transparently shows Free, closed pilot and proposed Pro without fake checkout',async({page})=>{
  await page.goto('/pricing');
- await expect(page.getByRole('heading',{name:/LeadPath is free to use/i})).toBeVisible();
- await expect(page.getByText(/CURRENT PLAN · FREE/i)).toBeVisible();
- await expect(page.getByRole('link',{name:/Create free account/i})).toHaveAttribute('href','/signup');
- await expect(page.getByText(/No paid LeadPath upgrade or checkout is offered/i)).toBeVisible();
- await expect(page.getByText(/\$19|\$49|COMING SOON|PLANNED/i)).toHaveCount(0);
+ await expect(page.getByRole('heading',{name:/Start free. Monitor with confidence/i})).toBeVisible();
+ await expect(page.getByText('FREE · AVAILABLE')).toBeVisible();
+ await expect(page.getByRole('link',{name:/Start free/i})).toHaveAttribute('href','/signup');
+ await expect(page.getByText('₹799')).toBeVisible();
+ await expect(page.getByText('₹2,499')).toBeVisible();
+ await expect(page.getByText('Pro subscriptions are not open')).toBeVisible();
+ await expect(page.getByText(/Pilot enrollment is currently closed/i)).toBeVisible();
+ await expect(page.getByRole('link',{name:/Open Starter in account/i})).toHaveCount(0);
 });
 test('public pages have canonical URLs while auth and private routes explicitly opt out of indexing',async({page})=>{
  await page.goto('/contact');
@@ -188,4 +191,24 @@ test('JSON-LD is parseable and matches visible software and documentation offeri
   if(route==='/')expect(schema['@graph'].find((item:{'@type':string})=>item['@type']==='WebApplication').offers.price).toBe('0');
   else expect(schema['@graph'].some((item:{'@type':string})=>item['@type']==='BreadcrumbList')).toBeTruthy();
  }
+});
+
+test('signed-in visitors see account and dashboard navigation instead of signup links',async({page})=>{
+ await page.route('**/api/me',async route=>{
+  await route.fulfill({status:200,contentType:'application/json',
+   body:JSON.stringify({id:'sample',name:'LeadPath User',email:'person@example.invalid',csrf_token:'test'})});
+ });
+ await page.goto('/');
+ await expect(page.locator('.site-header').getByRole('link',{name:'Dashboard'})).toBeVisible();
+ await expect(page.locator('.site-header').getByRole('link',{name:'Account'})).toBeVisible();
+ await expect(page.locator('.site-header').getByRole('link',{name:'Log in'})).toHaveCount(0);
+});
+test('Starter pilot pricing opens CTA only when public server availability explicitly says true',async({page})=>{
+ await page.route('**/api/public/billing',async route=>{
+  await route.fulfill({status:200,contentType:'application/json',
+   body:JSON.stringify({starter_pilot_available:true,pro_available:false,pilot_plan:'starter',currency:'INR'})});
+ });
+ await page.goto('/pricing');
+ await expect(page.getByRole('link',{name:/Open Starter in account/i})).toHaveAttribute('href','/account');
+ await expect(page.getByText('Pro subscriptions are not open')).toBeVisible();
 });

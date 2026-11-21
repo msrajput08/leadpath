@@ -1,6 +1,7 @@
 import type { Env, Monitor, Run } from './types.js';
 import { json, now, readBoundedJson, InputError } from './util.js';
 import { CONFIRMATION_WINDOW_MS, decryptSecret, syntheticPayload, sha256, constantTimeEqual, validateMakeWebhook, webhookOwnershipProof } from './security.mjs';
+import {getEntitlements,withinMonitorLimit,recordUsage,paidEntitlementsEnabled} from './entitlements.js';
 
 type SideEffect = { waitUntil(promise: Promise<unknown>): void };
 export const HOUR6 = 6*60*60*1000;
@@ -36,19 +37,23 @@ async function failRun(env: Env, runId: string, monitorId: string, state: 'uncon
 export async function runMonitor(env: Env, monitor: Monitor, source: 'manual'|'scheduled', ctx: SideEffect): Promise<{accepted:boolean;run_id?:string;message?:string}> {
  const time=now(); const runId=crypto.randomUUID();
  if (source==='scheduled' && !monitor.verified_at) return {accepted:false,message:'Verify Make webhook ownership before automatic monitoring.'};
+ const plan=await getEntitlements(env,monitor.user_id);
+ if (!(await withinMonitorLimit(env,monitor,plan.monitor_limit))) return {accepted:false,message:'This monitor is outside the current plan allowance.'};
  if (source==='manual') {
   const recent=await env.DB.prepare("SELECT COUNT(*) AS total FROM runs WHERE monitor_id=? AND source='manual' AND created_at>=?").bind(monitor.id,time-86400000).first<{total:number}>();
-  if ((recent?.total||0)>=3) return {accepted:false,message:'Free plan allows up to 3 manual runs in a rolling 24 hours.'};
+  if ((recent?.total||0)>=plan.manual_runs_per_day) return {accepted:false,message:'Your plan manual-run limit was reached for the last 24 hours.'};
  }
  // Atomic claim: last_checked + next_due prevent overlapping executions across cron / manual callers.
  const guard=source==='scheduled' ? 'next_due<=?' : '(last_checked IS NULL OR last_checked<=?)';
  const threshold=source==='scheduled'?time:time-MANUAL_COOLDOWN;
- const result=await env.DB.prepare(`UPDATE monitors SET next_due=?,lock_until=?,last_checked=?,last_run_id=?,health='pending',updated_at=? WHERE id=? AND state='active' AND ${guard} AND (lock_until IS NULL OR lock_until<?)`)
-  .bind(time+HOUR6,time+60000,time,runId,time,monitor.id,threshold,time).run();
+ const result=await env.DB.prepare(`UPDATE monitors SET next_due=?,schedule_interval_seconds=?,lock_until=?,last_checked=?,last_run_id=?,health='pending',updated_at=? WHERE id=? AND state='active' AND ${guard} AND (lock_until IS NULL OR lock_until<?)`)
+  .bind(time+plan.interval_seconds*1000,plan.interval_seconds,time+60000,time,runId,time,monitor.id,threshold,time).run();
  if (!result.meta.changes) return {accepted:false,message:'Monitor paused, locked or in manual-test cooldown (15 minutes).'};
  try {
   await env.DB.prepare("INSERT INTO runs (id,monitor_id,state,source,created_at,expires_at) VALUES(?,?,'pending',?,?,?)")
    .bind(runId,monitor.id,source,time,time+CONFIRMATION_WINDOW_MS).run();
+  // Accounting is best-effort; dispatch safety does not depend on a counter update.
+  await recordUsage(env,monitor.user_id,source,time).catch(()=>console.error('LeadPath usage counter update failed'));
  } catch {
   await env.DB.prepare("UPDATE monitors SET health='degraded',lock_until=NULL,next_due=? WHERE id=? AND last_run_id=?")
    .bind(time+MANUAL_COOLDOWN,monitor.id,runId).run();
@@ -125,16 +130,56 @@ export async function confirmCallback(req: Request, env: Env, monitorId: string,
  return json({ok:true,run_id:runId,delivery:'destination_confirmed'});
 }
 
-export async function sweepTimedOut(env: Env, ctx: SideEffect): Promise<void> {
- const expired=await env.DB.prepare("SELECT id,monitor_id FROM runs WHERE state='pending' AND expires_at<? ORDER BY expires_at LIMIT 8").bind(now()).all<{id:string;monitor_id:string}>();
+export async function runQueuedMonitor(env:Env,payload:unknown,ctx:SideEffect):Promise<void>{
+ if(!payload||typeof payload!=='object')return;
+ if((payload as {kind?:unknown}).kind==='sweep'){
+  await sweepTimedOut(env,ctx,4);
+  return;
+ }
+ const monitorId=(payload as {monitor_id?:unknown}).monitor_id;
+ if(typeof monitorId!=='string'||!/^[0-9a-f-]{36}$/.test(monitorId))return;
+ const monitor=await env.DB.prepare('SELECT * FROM monitors WHERE id=? AND state=\'active\'')
+  .bind(monitorId).first<Monitor>();
+ if(!monitor)return;
+ // Re-evaluate live entitlements and next_due inside the atomic claim; queue
+ // messages can be delivered more than once or after a downgrade.
+ await runMonitor(env,monitor,'scheduled',ctx);
+}
+export async function sweepTimedOut(env: Env, ctx: SideEffect,limit=32): Promise<void> {
+ const expired=await env.DB.prepare("SELECT id,monitor_id FROM runs WHERE state='pending' AND expires_at<? ORDER BY expires_at LIMIT ?").bind(now(),limit).all<{id:string;monitor_id:string}>();
  for (const run of expired.results) await failRun(env,run.id,run.monitor_id,'unconfirmed','ACK_TIMEOUT',ctx);
 }
 export async function scheduled(env: Env, ctx: SideEffect): Promise<void> {
- // Compact batches to keep daily free-tier D1 queries and cron CPU bounded.
- await sweepTimedOut(env,ctx);
- const due=await env.DB.prepare("SELECT * FROM monitors WHERE state='active' AND verified_at IS NOT NULL AND next_due<=? AND (lock_until IS NULL OR lock_until<?) ORDER BY next_due LIMIT 3")
-  .bind(now(),now()).all<Monitor>();
- for (const monitor of due.results) await runMonitor(env,monitor,'scheduled',ctx);
+ // Default three to preserve free-tier costs; up to 40 only after a separate paid capacity review.
+ if(!env.MONITOR_QUEUE)await sweepTimedOut(env,ctx);
+ const batchLimit=Math.max(1,Math.min(40,Number(env.SCHEDULE_BATCH_LIMIT)||3));
+ // Exclude over-quota monitors from the SQL batch BEFORE limiting, even after enabling
+ // paid plans. Otherwise dormant downgraded monitors may starve paying and Free users.
+ const paid=paidEntitlementsEnabled(env),scheduleNow=now();
+ const freeGuard=`AND NOT EXISTS (
+   SELECT 1 FROM monitors older WHERE older.user_id=monitors.user_id AND
+   (older.created_at<monitors.created_at OR (older.created_at=monitors.created_at AND older.id<monitors.id)))`;
+ const entitledGuard=`AND (SELECT COUNT(*) FROM monitors older WHERE older.user_id=monitors.user_id AND
+   (older.created_at<monitors.created_at OR (older.created_at=monitors.created_at AND older.id<=monitors.id)))
+   <= COALESCE((
+     SELECT p.monitor_limit FROM user_subscriptions s JOIN subscription_plans p ON p.code=s.plan_code
+     WHERE s.user_id=monitors.user_id AND s.status='active' AND s.current_period_end>?
+     AND (s.billing_mode='live' OR (s.billing_mode='test' AND ?=1))
+     ORDER BY s.current_period_end DESC LIMIT 1
+   ),1)`;
+ const due=await env.DB.prepare(`SELECT * FROM monitors WHERE state='active' AND verified_at IS NOT NULL AND next_due<=? AND (lock_until IS NULL OR lock_until<?)
+   ${paid?entitledGuard:freeGuard} ORDER BY next_due LIMIT ?`)
+  .bind(...(paid?[scheduleNow,scheduleNow,scheduleNow,env.ALLOW_TEST_BILLING_ENTITLEMENTS==='true'?1:0,batchLimit]:
+    [scheduleNow,scheduleNow,batchLimit])).all<Monitor>();
+ if(env.MONITOR_QUEUE){
+  // Sending IDs, not encrypted URLs or callback secrets. D1's atomic due claim
+  // makes retry/duplicate deliveries harmless. A single failed enqueue must
+  // fail the Cron event so it is observable, without advancing next_due.
+  await env.MONITOR_QUEUE.sendBatch([
+   ...due.results.map(m=>({body:{monitor_id:m.id,enqueued_at:scheduleNow}})),
+   {body:{kind:'sweep' as const,enqueued_at:scheduleNow}}
+  ]);
+ }else for(const monitor of due.results)await runMonitor(env,monitor,'scheduled',ctx);
  // Daily cleanup only. Repeating historical DELETE queries every 15 min is costly in D1.
  const time=now(); const utc=new Date(time);
  if (utc.getUTCHours()===0 && utc.getUTCMinutes()===0) {

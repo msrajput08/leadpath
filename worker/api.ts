@@ -4,6 +4,9 @@ import { newRandomString, sha256, encryptSecret, validateMakeWebhook } from './s
 import { runMonitor } from './engine.js';
 import { emailLoginConfigured } from './email-auth.js';
 import { passwordAuthConfigured } from './password-auth.js';
+import { getEntitlements, billingOverview } from './entitlements.js';
+import { sandboxCreateSubscription,sandboxCancelSubscription,sandboxVerifyCheckout } from './razorpay-test.js';
+import {createLiveSubscription,cancelLiveSubscription,confirmLiveCheckout,syncLiveSubscription,resumeLiveCheckout,liveCheckoutReady,pilotCanEnroll} from './razorpay-live.js';
 
 type Context = { waitUntil(promise: Promise<unknown>): void };
 const isId=(value:string)=>/^[0-9a-f-]{36}$/.test(value);
@@ -40,15 +43,38 @@ export async function handleApi(req:Request,env:Env,ctx:Context):Promise<Respons
   }
   return json({online:true,google_auth_configured:!!(env.GOOGLE_CLIENT_ID&&env.GOOGLE_CLIENT_SECRET),github_auth_configured:!!(env.GITHUB_CLIENT_ID&&env.GITHUB_CLIENT_SECRET),facebook_auth_configured:!!(env.FACEBOOK_APP_ID&&env.FACEBOOK_APP_SECRET),x_auth_configured:!!(env.X_CLIENT_ID&&env.X_CLIENT_SECRET),email_auth_configured:emailLoginConfigured(env),password_auth_configured:passwordAuthConfigured(env),db_binding_configured,db_schema_ready,version:'0.1.0'});
  }
+ if(pathname==='/api/public/billing' && req.method==='GET'){
+  // Public, low-detail commerce availability; never expose API keys, customer data or slots.
+  let pilotAvailable=false;
+  if(liveCheckoutReady(env)&&pilotCanEnroll(env)&&env.DB){
+   try {
+    const slots=await env.DB.prepare('SELECT COUNT(*) AS total FROM live_billing_slots').first<{total:number}>();
+    pilotAvailable=(slots?.total??Infinity)<1;
+   } catch { /* Do not advertise paid checkout if D1 is unavailable. */ }
+  }
+  return json({pilot_plan:'starter',starter_pilot_available:pilotAvailable,
+   pro_available:false,currency:'INR',region:'India',billing_period:'monthly'},200,
+   {'Cache-Control':'no-store, private'});
+ }
  const session=await getSession(req,env);
  if (!session) return fail(401,'Sign in to access your dashboard.');
  if (env.RATE_LIMITER && !(await env.RATE_LIMITER.limit({key:'user:'+session.user_id})).success) return fail(429,'Too many API requests; try again shortly.');
  if (req.method!=='GET' && (!mustBeSameOrigin(req,env) || !csrfOk(req,session))) return fail(403,'CSRF protection failed. Reload the page.');
  const userId=session.user_id;
  if (pathname==='/api/me' && req.method==='GET') return json({ id:userId,email:session.email,name:session.name,avatar_url:session.avatar_url,csrf_token:session.csrf_token });
+ if (pathname==='/api/billing' && req.method==='GET') return json(await billingOverview(env,userId));
+ if (pathname==='/api/billing/sandbox/create' && req.method==='POST') return sandboxCreateSubscription(env,userId,req);
+ if (pathname==='/api/billing/sandbox/cancel' && req.method==='POST') return sandboxCancelSubscription(env,userId);
+ if (pathname==='/api/billing/sandbox/verify' && req.method==='POST') return sandboxVerifyCheckout(env,userId,req);
+ if (pathname==='/api/billing/live/create' && req.method==='POST') return createLiveSubscription(env,userId,req);
+ if (pathname==='/api/billing/live/resume' && req.method==='POST') return resumeLiveCheckout(env,userId);
+ if (pathname==='/api/billing/live/confirm' && req.method==='POST') return confirmLiveCheckout(env,userId,req);
+ if (pathname==='/api/billing/live/sync' && req.method==='POST') return syncLiveSubscription(env,userId);
+ if (pathname==='/api/billing/live/cancel' && req.method==='POST') return cancelLiveSubscription(env,userId);
  if (pathname==='/api/monitors' && req.method==='GET') {
   const result=await env.DB.prepare('SELECT * FROM monitors WHERE user_id=? ORDER BY created_at DESC').bind(userId).all<Record<string,unknown>>();
-  return json({monitors:result.results.map(publicMonitor)});
+  const plan=await getEntitlements(env,userId);
+  return json({monitors:result.results.map(row=>({...publicMonitor(row),interval_seconds:plan.interval_seconds}))});
  }
  if (pathname==='/api/monitors' && req.method==='POST') {
   const form=await readSmallJson(req);
@@ -58,14 +84,17 @@ export async function handleApi(req:Request,env:Env,ctx:Context):Promise<Respons
   if (!candidate.ok || !candidate.url) return fail(400,candidate.error||'Invalid Make webhook.');
   if (form.authorized!==true) return fail(400,'Please confirm you own or are authorized to test this Make workflow.');
   if (!env.WEBHOOK_ENCRYPTION_KEY) return fail(503,'Webhook encryption secret not configured.');
+  const plan=await getEntitlements(env,userId);
   const count=await env.DB.prepare('SELECT COUNT(*) AS total FROM monitors WHERE user_id=?').bind(userId).first<{total:number}>();
-  if ((count?.total||0)>=1) return fail(403,'Free plan permits one monitor. Delete your existing monitor to replace it.');
+  if ((count?.total||0)>=plan.monitor_limit) return fail(403,plan.display_name+' plan permits '+plan.monitor_limit+' monitor(s).');
   const id=crypto.randomUUID(); const callbackSecret=newRandomString();
   const time=now(); const ciphertext=await encryptSecret(candidate.url,env.WEBHOOK_ENCRYPTION_KEY);
-  await env.DB.prepare("INSERT INTO monitors (id,user_id,name,webhook_ciphertext,secret_hash,state,health,interval_seconds,next_due,created_at,updated_at) VALUES(?,?,?,?,?,'active','configuration_required',21600,?,?,?)")
-   .bind(id,userId,name,ciphertext,await sha256(callbackSecret),time+6*3600000,time,time).run();
+  // A single D1 write serializes the quota decision; do not trust a prior count under concurrency.
+  const inserted=await env.DB.prepare("INSERT OR IGNORE INTO monitors (id,user_id,name,webhook_ciphertext,secret_hash,state,health,interval_seconds,schedule_interval_seconds,next_due,created_at,updated_at) SELECT ?,?,?,?,?,'active','configuration_required',21600,?,?,?,? WHERE (SELECT COUNT(*) FROM monitors WHERE user_id=?) < ?")
+   .bind(id,userId,name,ciphertext,await sha256(callbackSecret),plan.interval_seconds,time+plan.interval_seconds*1000,time,time,userId,plan.monitor_limit).run();
+  if (!inserted.meta.changes) return fail(403,'Monitor quota reached. Refresh your account limits.');
   await audit(env,userId,'monitor_created',id);
-  return json({ monitor:{id,name,state:'active',health:'configuration_required',interval_seconds:21600,next_due:time+6*3600000},
+  return json({ monitor:{id,name,state:'active',health:'configuration_required',interval_seconds:plan.interval_seconds,next_due:time+plan.interval_seconds*1000},
    callback_url:new URL(`/api/callback/${id}`,env.BASE_URL).toString(),callback_secret:callbackSecret,
    instructions:'Save this secret now: it will never be shown again. For first-time Make webhook verification, map both run_id and proof_code from the incoming webhook into the HTTP callback body after Google Sheets succeeds.' },201);
  }
@@ -135,6 +164,10 @@ export async function handleApi(req:Request,env:Env,ctx:Context):Promise<Respons
  }
  if (pathname==='/api/data/export' && req.method==='GET') return json(await accountExport(env,userId),200,{'Content-Disposition':'attachment; filename="leadpath-export.json"'});
  if (pathname==='/api/account' && req.method==='DELETE') {
+  // Never orphan a real Razorpay mandate: deleting D1 alone cannot stop recurring charges.
+  const activeBilling=await env.DB.prepare(`SELECT id FROM user_subscriptions WHERE user_id=?
+   AND billing_mode='live' AND status IN ('pending','active','past_due') LIMIT 1`).bind(userId).first();
+  if(activeBilling)return fail(409,'Cancel your live Razorpay subscription and wait until it ends before deleting your account. Contact support if the provider cannot cancel.');
   // SQLite/D1 foreign keys cascade sessions, monitors, runs, acknowledgments, alerts, preferences and audits.
   await env.DB.prepare('DELETE FROM users WHERE id=?').bind(userId).run();
   const local=new URL(env.BASE_URL).protocol==='http:' && new URL(env.BASE_URL).hostname==='localhost';

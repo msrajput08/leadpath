@@ -30,3 +30,21 @@ ENABLE_EMAIL_OTP=false
 # Supabase Auth for secure email/password (free Workers cannot perform password KDF locally).
 SUPABASE_URL=https://YOUR_PROJECT.supabase.co
 SUPABASE_ANON_KEY=
+
+# Subscription architecture: both gates OFF by default. Never enable for production without approval.
+PAID_ENTITLEMENTS_ENABLED=false
+BILLING_WEBHOOKS_ENABLED=false
+SCHEDULE_BATCH_LIMIT=3
+# Razorpay provider webhook secret is mandatory only when webhooks are explicitly enabled.
+# In production, set it via: wrangler secret put RAZORPAY_WEBHOOK_SECRET
+# RAZORPAY_WEBHOOK_SECRET=
+
+# Optional: Razorpay Test Mode ONLY. Sandbox cannot charge real cards.
+# Disabled unless ALL test settings are present and explicitly enabled in an isolated environment.
+RAZORPAY_SANDBOX_ENABLED=false
+RAZORPAY_TEST_KEY_ID=
+# Set RAZORPAY_TEST_KEY_SECRET via a secret manager; do not commit a real value.
+RAZORPAY_TEST_KEY_SECRET=
+# Plan IDs must refer to 1-month recurring INR plans: Starter 79900 and Pro 249900 paise.
+RAZORPAY_TEST_STARTER_PLAN_ID=
+RAZORPAY_TEST_PRO_PLAN_ID=

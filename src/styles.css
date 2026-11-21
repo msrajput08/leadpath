@@ -116,3 +116,33 @@
 .guide-related ul{list-style:none;margin:0;padding:0;display:grid;gap:12px}
 .guide-detail>p{line-height:1.85;max-width:750px}
 @media(max-width:700px){.seo-guide-links{grid-template-columns:1fr}}
+
+/* Subscription foundation: read-only billing status and proposed future tiers */
+.subscription-panel{margin-top:25px}
+.subscription-soon{display:inline-flex;align-items:center;border:1px solid var(--border);border-radius:999px;padding:5px 11px;font-size:.72rem;font-weight:700;color:var(--muted);letter-spacing:.02em}
+.subscription-summary{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:14px;margin:20px 0}
+.subscription-summary>div{display:flex;flex-direction:column;gap:5px;background:var(--surface-2);border:1px solid var(--border);padding:17px;border-radius:12px}
+.subscription-summary strong{font:800 1.45rem Manrope,sans-serif;color:var(--text)}
+.subscription-summary small{font-size:.77rem;color:var(--muted)}
+.subscription-comparison{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:14px}
+.subscription-tier{min-width:0;border:1px solid var(--border);border-radius:13px;padding:20px;background:var(--surface-2)}
+.subscription-tier h3{margin:12px 0}
+.subscription-tier .subscription-price{font:800 1.5rem Manrope,sans-serif}
+.subscription-price small{font:500 .8rem 'DM Sans',sans-serif;color:var(--muted)}
+.subscription-tier>span:last-child,.subscription-footnote{display:flex;align-items:center;gap:7px;flex-wrap:wrap}
+.subscription-tier p{font-size:.83rem}
+.subscription-footnote{margin-top:20px}
+@media(max-width:700px){.subscription-summary,.subscription-comparison{grid-template-columns:1fr}.subscription-soon{font-size:.65rem}}
+
+.monitor-switcher{display:flex;align-items:center;gap:12px;flex-wrap:wrap;margin:18px 0;color:var(--muted);font-size:.85rem;font-weight:700}
+.monitor-switcher select{min-width:180px;max-width:100%;border:1px solid var(--border);border-radius:9px;background:var(--surface-2);color:var(--text);padding:9px 12px;font:inherit}
+
+/* Public tier cards: distinctive, responsive, and honest about closed purchase states. */
+.pricing-page .price-grid{align-items:stretch}
+.pricing-page .pricing-card{min-width:0}
+.pricing-page .pricing-pilot{border-color:color-mix(in srgb,var(--green) 38%,var(--border));background:linear-gradient(155deg,var(--surface),var(--surface-2))}
+.pricing-page .price{font-size:clamp(2rem,3vw,2.7rem)}
+.pricing-page .price span{display:inline-block}
+.plan-unavailable{margin-top:auto;display:flex;align-items:center;justify-content:center;min-height:46px;padding:12px 14px;border:1px solid var(--border);border-radius:11px;background:var(--surface-2);font-size:.84rem;font-weight:700;color:var(--muted);text-align:center}
+@media(max-width:940px){.pricing-page .price-grid{grid-template-columns:repeat(2,minmax(0,1fr))}}
+@media(max-width:650px){.pricing-page .price-grid{grid-template-columns:1fr}.pricing-page .pricing-card{padding:24px}}

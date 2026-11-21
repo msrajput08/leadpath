@@ -5,7 +5,8 @@ import { handleApi } from './api.js';
 import { socialStart, socialCallback } from './social.js';
 import { emailRequest, emailVerify } from './email-auth.js';
 import { passwordSignUp, passwordLogin, passwordVerifyEmail, passwordResend, passwordForgot, passwordReset } from './password-auth.js';
-import { confirmCallback, scheduled } from './engine.js';
+import { confirmCallback, scheduled, runQueuedMonitor } from './engine.js';
+import { razorpayWebhook } from './billing.js';
 
 type Ctx = {waitUntil(promise:Promise<unknown>):void};
 function hardened(res:Response):Response {
@@ -22,13 +23,15 @@ export default {
   const path=new URL(req.url).pathname;
   try {
    if (!env.BASE_URL) return hardened(fail(503,'BASE_URL not configured'));
+   if (path==='/api/billing/webhook/razorpay' && req.method==='POST') return hardened(await razorpayWebhook(req,env,'test'));
+   if (path==='/api/billing/webhook/razorpay-live' && req.method==='POST') return hardened(await razorpayWebhook(req,env,'live'));
    // Protect both OAuth providers and public diagnostics before database access.
    if ((((path==='/auth/google/start'||path==='/auth/google/callback'||
            path==='/auth/github/start'||path==='/auth/github/callback'||
            path==='/auth/facebook/start'||path==='/auth/facebook/callback'||
            path==='/auth/x/start'||path==='/auth/x/callback') && req.method==='GET')
          || ((path==='/auth/email/request'||path==='/auth/email/verify'||path.startsWith('/auth/password/')) && req.method==='POST')
-         || (path==='/api/public/status' && req.method==='GET')) && env.RATE_LIMITER) {
+         || ((path==='/api/public/status'||path==='/api/public/billing') && req.method==='GET')) && env.RATE_LIMITER) {
     const key=(path.startsWith('/auth/')?'auth:':'public-status:')+(req.headers.get('CF-Connecting-IP')||'anonymous');
     if (!(await env.RATE_LIMITER.limit({key})).success) return hardened(fail(429,'Rate limit reached. Try again shortly.'));
    }
@@ -60,6 +63,22 @@ export default {
    // Server-side logging intentionally excludes request URLs and tokens.
    console.error('LeadPath request failure',error instanceof Error?error.name:'UnknownError');
    return hardened(json({error:'Unexpected server error. Please try again.'},500));
+  }
+ },
+ async queue(batch:{queue:string;messages:Array<{body:unknown;ack():void;retry():void}>},env:Env,ctx:Ctx):Promise<void>{
+  if(batch.queue!=='leadpath-monitor-jobs'){
+   for(const message of batch.messages)message.retry();
+   console.error('LeadPath received unexpected monitoring queue');
+   return;
+  }
+  for(const message of batch.messages){
+   try{
+    await runQueuedMonitor(env,message.body,ctx);
+    message.ack();
+   }catch(error){
+    console.error('LeadPath queued monitor failed',error instanceof Error?error.name:'UnknownError');
+    message.retry();
+   }
   }
  },
  async scheduled(_event:unknown,env:Env,ctx:Ctx):Promise<void> {
