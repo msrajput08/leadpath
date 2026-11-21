@@ -82,7 +82,14 @@ export async function createLiveSubscription(env:Env,userId:string,req:Request):
  VALUES(?,?,?,?) ON CONFLICT(user_id) DO UPDATE SET nonce=excluded.nonce,locked_until=excluded.locked_until,
  created_at=excluded.created_at WHERE billing_creation_locks.locked_until<?`)
  .bind(userId,nonce,time+1800000,time,time).run();
- if(!lock.meta.changes)return fail(409,'Another checkout is already running for this account.');
+ if(!lock.meta.changes){
+  // A stale creation lock must not permanently consume the one-customer pilot
+  // slot when no provider subscription was created by this attempt.
+  await env.DB.prepare(`DELETE FROM live_billing_slots
+   WHERE user_id=? AND created_at=? AND provider_subscription_id IS NULL`)
+   .bind(userId,time).run();
+  return fail(409,'Another checkout is already running for this account.');
+ }
  let created:RazorpaySubscription;
  try{
   created=await razorpay<RazorpaySubscription>(env,'POST','subscriptions',
@@ -115,6 +122,26 @@ export async function createLiveSubscription(env:Env,userId:string,req:Request):
  return json({mode:'live',plan_code:code,checkout_url:created.short_url,
   provider_subscription_id:created.id,
   notice:'Live recurring payments. Authorization may charge your chosen payment method monthly, for up to 12 billing cycles. Cancel future renewals from Account.'},201);
+}
+// Existing pending customers must be able to complete the same Razorpay mandate
+// after closing a tab. Never create a second live subscription on resume.
+export async function resumeLiveCheckout(env:Env,userId:string):Promise<Response>{
+ if(!liveApiReady(env))return fail(503,'Live provider unavailable.');
+ const record=await owned(env,userId);
+ if(!record||record.status!=='pending'||!validSubscription(record.provider_subscription_id))
+  return fail(409,'There is no pending live checkout to continue.');
+ let sub:RazorpaySubscription;
+ try{sub=await razorpay<RazorpaySubscription>(env,'GET','subscriptions/'+record.provider_subscription_id);}
+ catch(e){return providerFailed(e);}
+ const expected=record.plan_code==='starter'?env.RAZORPAY_LIVE_STARTER_PLAN_ID:env.RAZORPAY_LIVE_PRO_PLAN_ID;
+ if(sub.id!==record.provider_subscription_id||sub.plan_id!==expected)
+  return fail(502,'Live provider subscription mismatch. Contact support.');
+ if(!['created','authenticated','pending'].includes(sub.status||''))
+  return fail(409,'Subscription status changed. Refresh payment status before proceeding.');
+ if(!validGatewayUrl(sub.short_url))
+  return fail(502,'Razorpay did not return a valid checkout link. Contact support.');
+ return json({mode:'live',plan_code:record.plan_code,checkout_url:sub.short_url,
+  notice:'You are continuing the original Razorpay mandate; no new subscription was created.'});
 }
 async function owned(env:Env,userId:string):Promise<SubscriptionRow|null>{
  return env.DB.prepare(`SELECT provider_subscription_id,plan_code,status FROM user_subscriptions WHERE
