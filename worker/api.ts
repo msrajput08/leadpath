@@ -6,7 +6,7 @@ import { emailLoginConfigured } from './email-auth.js';
 import { passwordAuthConfigured } from './password-auth.js';
 import { getEntitlements, billingOverview } from './entitlements.js';
 import { sandboxCreateSubscription,sandboxCancelSubscription,sandboxVerifyCheckout } from './razorpay-test.js';
-import {createLiveSubscription,cancelLiveSubscription,confirmLiveCheckout,syncLiveSubscription,liveCheckoutReady} from './razorpay-live.js';
+import {createLiveSubscription,cancelLiveSubscription,confirmLiveCheckout,syncLiveSubscription,resumeLiveCheckout,liveCheckoutReady} from './razorpay-live.js';
 
 type Context = { waitUntil(promise: Promise<unknown>): void };
 const isId=(value:string)=>/^[0-9a-f-]{36}$/.test(value);
@@ -67,6 +67,7 @@ export async function handleApi(req:Request,env:Env,ctx:Context):Promise<Respons
  if (pathname==='/api/billing/sandbox/cancel' && req.method==='POST') return sandboxCancelSubscription(env,userId);
  if (pathname==='/api/billing/sandbox/verify' && req.method==='POST') return sandboxVerifyCheckout(env,userId,req);
  if (pathname==='/api/billing/live/create' && req.method==='POST') return createLiveSubscription(env,userId,req);
+ if (pathname==='/api/billing/live/resume' && req.method==='POST') return resumeLiveCheckout(env,userId);
  if (pathname==='/api/billing/live/confirm' && req.method==='POST') return confirmLiveCheckout(env,userId,req);
  if (pathname==='/api/billing/live/sync' && req.method==='POST') return syncLiveSubscription(env,userId);
  if (pathname==='/api/billing/live/cancel' && req.method==='POST') return cancelLiveSubscription(env,userId);
