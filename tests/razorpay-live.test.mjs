@@ -189,3 +189,65 @@ test('definitive provider rejection releases slot without creating duplicate rec
   assert.equal((await DB.prepare('SELECT COUNT(*) c FROM user_subscriptions').first()).c,0);
  }finally{globalThis.fetch=previous;DB.sql.close();}
 });
+
+test('interrupted live payment resumes the ORIGINAL mandate, not a duplicate subscription, and unfinished checkout can be cancelled',async()=>{
+ const DB=makeDb(),who=await account(DB),env=setupEnv(DB),original=globalThis.fetch;
+ const id='sub_ResumablePilot123',url='https://rzp.io/rzp/unfinishedpilot';
+ let creates=0,cancelled=false;
+ globalThis.fetch=async(target,options)=>{
+  const path=String(target);
+  if(path.endsWith('plans/plan_StarterLive2026'))
+   return Response.json({id:'plan_StarterLive2026',period:'monthly',interval:1,
+    item:{amount:79900,currency:'INR'}});
+  if(path.endsWith('/subscriptions')&&options.method==='POST'){
+   creates++;
+   return Response.json({id,plan_id:'plan_StarterLive2026',status:'created',short_url:url});
+  }
+  if(path.endsWith('/subscriptions/'+id+'/cancel')){
+   assert.equal(JSON.parse(options.body).cancel_at_cycle_end,false,
+    'unfinished mandate cancelled immediately, not at a paid period end');
+   cancelled=true;
+   return Response.json({id,plan_id:'plan_StarterLive2026',status:'cancelled'});
+  }
+  if(path.endsWith('/subscriptions/'+id))
+   return Response.json({id,plan_id:'plan_StarterLive2026',
+    status:cancelled?'cancelled':'created',short_url:url,paid_count:0});
+  throw Error('Unexpected Razorpay URL: '+path);
+ };
+ try{
+  const opened=await send(env,who,'/api/billing/live/create','POST',{plan_code:'starter'});
+  assert.equal(opened.status,201,await opened.clone().text());
+  assert.equal((await opened.json()).checkout_url,url);
+  const resumed=await send(env,who,'/api/billing/live/resume','POST',{});
+  assert.equal(resumed.status,200,await resumed.clone().text());
+  assert.equal((await resumed.json()).checkout_url,url);
+  assert.equal(creates,1,'recovery MUST NOT create a second Razorpay recurring mandate');
+  assert.equal((await DB.prepare('SELECT COUNT(*) AS n FROM live_billing_slots').first()).n,1);
+  const cancelledRes=await send(env,who,'/api/billing/live/cancel','POST',{});
+  assert.equal(cancelledRes.status,200);
+  assert.equal((await DB.prepare('SELECT COUNT(*) AS n FROM live_billing_slots').first()).n,0);
+  assert.equal((await DB.prepare('SELECT status FROM user_subscriptions WHERE user_id=?')
+   .bind(who.userId).first()).status,'cancelled');
+  assert.equal((await send(env,who,'/api/billing/live/resume','POST',{})).status,409);
+ }finally{globalThis.fetch=original;DB.sql.close();}
+});
+
+test('live checkout cannot leak a pilot slot when a stale billing creation lock rejects a new mandate',async()=>{
+ const DB=makeDb(),who=await account(DB),env=setupEnv(DB),original=globalThis.fetch;
+ try{
+  const t=Date.now();
+  await DB.prepare('INSERT INTO billing_creation_locks(user_id,nonce,locked_until,created_at) VALUES(?,?,?,?)')
+   .bind(who.userId,crypto.randomUUID(),t+600000,t).run();
+  globalThis.fetch=async(target)=>{
+   assert.ok(String(target).endsWith('plans/plan_StarterLive2026'),
+    'the live mandate creation POST must never occur after a locked checkout');
+   return Response.json({id:'plan_StarterLive2026',period:'monthly',interval:1,
+    item:{amount:79900,currency:'INR'}});
+  };
+  const blocked=await send(env,who,'/api/billing/live/create','POST',{plan_code:'starter'});
+  assert.equal(blocked.status,409);
+  assert.equal((await DB.prepare('SELECT COUNT(*) AS n FROM live_billing_slots').first()).n,0,
+   'an unsuccessful checkout MUST NOT permanently block the only paid pilot slot');
+  assert.equal((await DB.prepare('SELECT COUNT(*) AS n FROM user_subscriptions').first()).n,0);
+ }finally{globalThis.fetch=original;DB.sql.close();}
+});
