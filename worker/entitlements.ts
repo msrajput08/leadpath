@@ -1,5 +1,5 @@
 import type { Env } from './types.js';
-import {liveCheckoutReady} from './razorpay-live.js';
+import {liveCheckoutReady,pilotCanEnroll} from './razorpay-live.js';
 
 export type PlanCode = 'free' | 'starter' | 'pro';
 export interface Entitlements {
@@ -78,7 +78,7 @@ export async function billingOverview(env:Env,userId:string) {
    liveSpace=(slots?.total??Infinity)<Number(env.LIVE_MAX_PAID_ACCOUNTS);
   } catch { liveSpace=false; }
  }
- const liveCanEnroll=liveEnabled&&liveSpace;
+ const liveCanEnroll=liveEnabled&&liveSpace&&pilotCanEnroll(env,userId);
  return {current,plans:plans.results.map(mapPlan).map(p=>({
    ...p,available_for_purchase:liveCanEnroll&&p.code==='starter',
    operationally_available:p.code==='free'||(liveCanEnroll&&p.code==='starter')
