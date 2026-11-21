@@ -294,3 +294,21 @@ test('signed live activation upgrades old Free monitor to hourly schedule; cance
   assert.equal((await getEntitlements(env,who.userId)).code,'free');
  }finally{DB.sql.close();}
 });
+
+test('private live payment pilot is unavailable to the public and blocks other signed-in accounts',async()=>{
+ const DB=makeDb(),owner=await account(DB),outsider=await account(DB),env=setupEnv(DB);
+ env.LIVE_PILOT_USER_ID=owner.userId;
+ try{
+  const publicPrice=await handleApi(new Request(base+'/api/public/billing'),env,ctx);
+  assert.equal(publicPrice.status,200);
+  assert.equal((await publicPrice.json()).starter_pilot_available,false,
+   'an internal one-account pilot must not advertise open purchase to the public');
+  const ownerOverview=await send(env,owner,'/api/billing');
+  assert.equal((await ownerOverview.json()).checkout_enabled,true,
+   'the designated pilot account can see the real paid checkout');
+  const outsiderOverview=await send(env,outsider,'/api/billing');
+  assert.equal((await outsiderOverview.json()).checkout_enabled,false);
+  assert.equal((await send(env,outsider,'/api/billing/live/create','POST',{plan_code:'starter'})).status,403);
+  assert.equal((await DB.prepare('SELECT COUNT(*) AS total FROM live_billing_slots').first()).total,0);
+ }finally{DB.sql.close();}
+});
