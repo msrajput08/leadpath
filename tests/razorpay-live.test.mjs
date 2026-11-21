@@ -222,6 +222,8 @@ test('interrupted live payment resumes the ORIGINAL mandate, not a duplicate sub
   assert.equal(resumed.status,200,await resumed.clone().text());
   assert.equal((await resumed.json()).checkout_url,url);
   assert.equal(creates,1,'recovery MUST NOT create a second Razorpay recurring mandate');
+  assert.equal((await DB.prepare('SELECT COUNT(*) AS n FROM billing_creation_locks').first()).n,0,
+   'successful durable mandate setup must not leave a stale 30-minute creation lock');
   assert.equal((await DB.prepare('SELECT COUNT(*) AS n FROM live_billing_slots').first()).n,1);
   const cancelledRes=await send(env,who,'/api/billing/live/cancel','POST',{});
   assert.equal(cancelledRes.status,200);
