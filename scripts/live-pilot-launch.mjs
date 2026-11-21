@@ -30,7 +30,7 @@ function sql(command){
  if(!v?.results)return null;
  return v.results[0]||null;
 }
-function assertSetup(){
+function assertSetup({requireReviewedBranch=true}={}){
  if(!fs.existsSync(configPath)||!fs.existsSync(wrangler))throw Error('Run npm ci and npm run live:preflight first.');
  const cfg=decodeJson(fs.readFileSync(configPath,'utf8'),'production config');
  if(cfg.name!=='leadpath'||cfg.vars?.BASE_URL!==origin||
@@ -42,9 +42,12 @@ function assertSetup(){
   producer?.queue!=='leadpath-monitor-jobs'||cfg.queues?.consumers?.length!==1||
   consumer?.queue!=='leadpath-monitor-jobs'||consumer?.max_batch_size!==1)
   throw Error('Verified Free Queue producer and single-message consumer bindings are required. No changes made.');
- const branch=exec('git',['branch','--show-current']);
- if(branch!==expectedBranch)throw Error('Switch to the reviewed feature branch before any live operation. Refusing '+branch);
- if(exec('git',['status','--porcelain','--untracked-files=no']))throw Error('Uncommitted tracked files exist. Review before production launch.');
+ if(requireReviewedBranch){
+  const branch=exec('git',['branch','--show-current']);
+  if(branch!==expectedBranch)throw Error('Switch to the reviewed feature branch before launch. Refusing '+branch);
+  if(exec('git',['status','--porcelain','--untracked-files=no']))
+   throw Error('Uncommitted tracked files exist. Review before production launch.');
+ }
  return cfg;
 }
 async function apiCheck(){
@@ -100,7 +103,7 @@ const instruction='I VERIFIED CAPACITY AND APPROVE ONE REAL STARTER SUBSCRIPTION
 const rl=process.stdin.isTTY?readline.createInterface({input:process.stdin,output:process.stdout}):null;
 try{
  if(mode==='pause'){
-  assertSetup();
+  assertSetup({requireReviewedBranch:false});
   setFinal(false);
   console.log('New LeadPath Live checkout PAUSED. Existing Razorpay recurring mandates are NOT cancelled.');
   process.exit(0);
