@@ -251,3 +251,46 @@ test('live checkout cannot leak a pilot slot when a stale billing creation lock 
   assert.equal((await DB.prepare('SELECT COUNT(*) AS n FROM user_subscriptions').first()).n,0);
  }finally{globalThis.fetch=original;DB.sql.close();}
 });
+
+test('signed live activation upgrades old Free monitor to hourly schedule; cancellation downgrades without drifting on duplicate events',async()=>{
+ const DB=makeDb(),who=await account(DB),env=setupEnv(DB),t=Date.now();
+ const monitorId=crypto.randomUUID(),subId='sub_CadencePilot123';
+ try{
+  await DB.prepare(`INSERT INTO monitors(id,user_id,name,webhook_ciphertext,secret_hash,
+   verified_at,state,health,interval_seconds,schedule_interval_seconds,next_due,created_at,updated_at)
+   VALUES(?,?,?,?,?,?,'active','healthy',21600,21600,?,?,?)`)
+   .bind(monitorId,who.userId,'Previously free monitor','encrypted','hashed',t-100000,
+    t+4*3600000,t-200000,t).run();
+  await DB.prepare(`INSERT INTO user_subscriptions(id,user_id,plan_code,provider,provider_subscription_id,
+    status,current_period_end,created_at,updated_at,billing_mode)
+    VALUES(?,?,'starter','razorpay',?,'pending',?,?,?,'live')`)
+   .bind(crypto.randomUUID(),who.userId,subId,t+86400000,t,t).run();
+  let seq=0;
+  async function post(kind,entityStatus,paidCount=1){
+   seq++;
+   const entity={id:subId,plan_id:'plan_StarterLive2026',status:entityStatus,paid_count:paidCount,
+    current_start:Math.floor(t/1000)-100,current_end:Math.floor(t/1000)+86400};
+   const body=JSON.stringify({event:kind,created_at:Math.floor(t/1000)+seq,payload:{subscription:{entity}}});
+   const sig=await signature(env.RAZORPAY_LIVE_WEBHOOK_SECRET,body);
+   return razorpayWebhook(new Request(base+'/api/billing/webhook/razorpay-live',{
+    method:'POST',headers:{'X-Razorpay-Signature':sig,'X-Razorpay-Event-Id':'evt_cadence_'+seq},
+    body}),env,'live');
+  }
+  assert.equal((await post('subscription.activated','active')).status,200);
+  const upgraded=await DB.prepare('SELECT schedule_interval_seconds,next_due FROM monitors WHERE id=?')
+   .bind(monitorId).first();
+  assert.equal(upgraded.schedule_interval_seconds,3600);
+  assert.ok(upgraded.next_due<=Date.now()+3600000+2000);
+  assert.equal((await post('subscription.charged','active')).status,200);
+  assert.equal((await DB.prepare('SELECT next_due FROM monitors WHERE id=?')
+   .bind(monitorId).first()).next_due,upgraded.next_due,
+   'an additional paid webhook must not keep moving an already-aligned next due');
+  assert.equal((await post('subscription.cancelled','cancelled')).status,200);
+  const downgraded=await DB.prepare('SELECT schedule_interval_seconds,next_due FROM monitors WHERE id=?')
+   .bind(monitorId).first();
+  assert.equal(downgraded.schedule_interval_seconds,21600);
+  assert.ok(downgraded.next_due>=Date.now()+21600000-2000,
+   'no extra hourly checks after cancellation');
+  assert.equal((await getEntitlements(env,who.userId)).code,'free');
+ }finally{DB.sql.close();}
+});
